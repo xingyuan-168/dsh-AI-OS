@@ -8,6 +8,12 @@
 
 ## Unreleased
 
+### 插件激活状态（2026-10-01 实测）
+
+- 截至 DSH 0.2.0-rc.2 **没有在线激活路径**：`plugin_manager set_plugin(target="ai-engineering-os")` 返回 `unknown-plugin`（条目尚未进合成树），重复 `install_bundle` 仍为 `not-bundle` / `changed: false`，直接改 `cordis.patch.yml` 也不会触发重新合成。
+- 因此插件的加载**必须重启 DSH**；重启前强制层不生效，`aios` CLI 本身不受影响。
+- 已落成事实与排障表：`docs/GOVERNANCE_RULES.md`「安装与强制」「排障」；使用方式见 `README.md`「如何使用」。
+
 ### DSH 宿主迁移与全局强制（2026-10-01，ADR-0018，breaking change）
 
 - 破坏性重命名：命令 `codex-os` → `aios`，导入 `codex_ai_os.*` → `aios.*`，发行名 → `aios-governance`，运行库 `.codex-os/` → `.aios/`，worktree 分支前缀 → `aios/wt-`（既有 `codex/wt-*` 登记继续有效）。

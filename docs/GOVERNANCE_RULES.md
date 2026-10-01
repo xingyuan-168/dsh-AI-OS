@@ -52,15 +52,32 @@
 
 安装分两步，第二步无法由源码或本机文件证明：
 
-1. **装依赖**：`plugin_manager install_bundle` 以本地路径 spec 安装本包（例如 `file:<repo>/plugins/ai-engineering-os`）。pnpm 会把包链接进 `~/.dsh/profiles/<profile>/node_modules/`。该调用会返回 `not-bundle`：本包是**插件**而不是 bundle，它不向 profile 根插入行，因此这一步只负责让模块可解析。
-2. **接进补丁层**：在 `~/.dsh/profiles/<profile>/cordis.patch.yml` 追加一个条目，`id` 与 `name` 用 `ai-engineering-os`，`config` 即全局策略（`strict`、`kernelCommand`、`timeoutMs`、`failMode`）。这是 profile 唯一的策略来源，插件不读第二份策略文件。
+1. **装依赖**：`plugin_manager install_bundle` 以本地路径 spec 安装本包（例如 `file:<repo>/plugins/ai-engineering-os`）。pnpm 会把包链接进 `~/.dsh/profiles/<profile>/node_modules/`。该调用返回 `not-bundle` 且 `changed: false`：本包是**插件**而不是 bundle，它不向 profile 根插入行，因此这一步只负责让模块可解析。
+2. **接进补丁层**：在 `~/.dsh/profiles/<profile>/cordis.patch.yml` 追加一个条目，`id` 与 `name` 用 `ai-engineering-os`，`config` 即全局策略（`strict`、`kernelCommand`、`timeoutMs`、`failMode`）。这是 profile 唯一的策略来源，插件不读第二份策略文件。条目形状与既有内建条目一致（`- id / name / config`），补丁层自身文档说明它支持 insert list。
 
-**激活需要重启 DSH**：补丁层在启动时合成进 Loader 树，运行中的宿主不会因为文件被改动就重新合成。因此：
+**激活必须重启 DSH**（截至 0.2.0-rc.2，已实测无在线激活路径）：
 
-- `aios doctor` 的 `dsh-profile` 只能证明"某个 profile 声明了本插件"，`plugin-manifest` 只能证明"本包在磁盘上"；两者都不等于已加载，所以两者都返回 `ok: null` 的未知态而不是通过。
-- `plugin_manager list_plugins` 只能证明宿主当前的 Loader 树里有这个条目；重启前后对比条目数是最直接的证据。
-- 真正的强制生效只由**新会话的实际行为**证明：在已治理项目里写 `input/` 应被拒并给出规则编号；未初始化项目在 `strict` 下写 `src/` 应被 `CODE_START_BLOCKED` 拒绝。
-- 源码验证不等于插件已安装，安装也不等于已加载，加载也不等于宿主未禁用。三者分开陈述。
+- 运行中的宿主只暴露按**已合成树**寻址的接口：`plugin_manager set_plugin(target="ai-engineering-os")` 返回 `unknown-plugin`，因为该条目还没进树；`install_bundle` 重复执行仍是 `not-bundle`、`changed: false`。
+- 补丁层在**启动时**合成进 Loader 树；直接改文件不会触发重新合成，`configEditor` 是插件无法调用的 Service。
+- 因此：改完补丁层 → 重启 DSH → `plugin_manager list_plugins` 条目总数应从 186 变为 187，且 `cordis_inspect_query(host, Tool, listTools)` 应出现 8 个治理工具。
+
+激活与否的三种证据强度不同，必须分开陈述：
+
+- `aios doctor` 的 `plugin-manifest` 只证明"本包在磁盘上"，`dsh-profile` 只证明"某个 profile 声明了它"；两者都不是已加载，所以返回 `ok: null` 而不是通过。
+- `plugin_manager list_plugins` 证明宿主当前 Loader 树里有这个条目。
+- 真正的强制只由**新会话的实际行为**证明：在已治理项目里写 `input/` 应被拒并给出规则编号；对 `docs/` 的写入应放行；未初始化项目在 `strict` 下写 `src/` 应被 `CODE_START_BLOCKED` 拒绝。
+
+源码验证不等于已安装，安装不等于已加载，加载不等于宿主未禁用。
+
+### 排障
+
+| 现象 | 处置 |
+| --- | --- |
+| 重启后条目仍是 186 | 补丁层没被读到：核对 `cordis.patch.yml` 的 YAML 缩进与 `name` 是否等于包名 `ai-engineering-os` |
+| 条目存在但 `fiberPhase` 非 active | 插件加载失败（宿主会隔离）：读 `~/.dsh/profiles/<profile>/.plugin-manager/logs/` 最近一次 operation 的日志，按报错改 `src/surfaces.js` / `src/index.js` 的注册形状 |
+| 拦截不生效但插件 active | 宿主进程的 PATH 里可能没有 `aios`：把补丁条目的 `kernelCommand` 改成绝对路径（如 `C:/Users/<user>/.local/bin/aios.exe`） |
+| 无关项目写不了 `src/` | 把补丁条目的 `strict` 改成 `false`，未初始化项目退回到只受 Tier 0 约束 |
+| 需要完全回滚 | `plugin_manager remove_bundle ai-engineering-os` + 删除补丁条目 + 删 `node_modules/ai-engineering-os`；CLI 与仓库事实不受影响 |
 
 三层强制模型见 AGENTS.md「强制分层」。Tier 0 基线在**任何工作区**恒定开启，项目配置不可关闭；Tier 1 需要 `.aios/project.yaml`；Tier 2（默认开启）使未初始化项目同样套用 Tier 1，且只在内存中物化默认配置，不静默写盘。
 

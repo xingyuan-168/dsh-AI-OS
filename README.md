@@ -27,6 +27,61 @@ AI Engineering OS 是 DeepSeek Harness 的**工程治理层**：无状态三 Gat
 
 强制分层（Tier 0 基线 / Tier 1 已治理项目 / Tier 2 全局严格模式）见 [AGENTS.md](AGENTS.md) 与 [治理规则](docs/GOVERNANCE_RULES.md)。
 
+## 如何使用
+
+### 先看激活状态（必读）
+
+| 部分 | 状态 | 说明 |
+| --- | --- | --- |
+| `aios` 命令行 | **已可用** | 全局安装完成，`aios --help` 直接可用 |
+| CLI 的 Gate 判定 | **已可用** | `check` / `finish` / `authorize-dsh` 均已实测 |
+| DSH 插件强制 | **未激活** | 包已装进 profile、补丁条目已写；**需要重启 DSH** 才会加载（见下） |
+
+在插件激活之前，**没有任何自动拦截**：不会阻止你写 `input/`，也不会阻止 force push。只有你自己或 Agent 主动调用 `aios` 时才受治理。
+
+### 激活（一次性）
+
+1. 重启 DeepSeek Harness。
+2. 重启后确认：`plugin_manager list_plugins` 的条目总数从 186 变成 187；`cordis_inspect_query(host, Tool, listTools)` 里出现 8 个治理工具。
+3. 再确认行为：对 `input/` 的写入被拒并带规则编号，对 `docs/` 的写入放行。
+
+重启后如果没生效，按 [治理规则·排障](docs/GOVERNANCE_RULES.md) 的表格逐项排查。
+
+### 日常三种用法
+
+**1. 在 DSH 里正常干活（激活后自动生效）**
+
+你不需要做任何事。被拦时终端会给出 `规则编号: 原因; targets=...`，按编号命名的事实去修，然后重试即可。被拦不等于 AIOS 拒绝你，而是它发现了一个客观阻塞点（缺 GitHub remote、调研未记录、前端未批准、路径受保护等）。用户当前明确要求永远优先于 AIOS 建议。
+
+**2. 让 Agent 用治理工具（激活后）**
+
+Agent 会自动获得 8 个工具，正常节奏是：
+
+- 任务开始时：`governance_check(project_root=..., stage="start", change_class=...)`，并先把 `git rev-parse HEAD` 记下来；
+- 动前端前：`governance_check(stage="frontend", frontend_impact=..., frontend_scope=...)`；
+- 任务结束时：`governance_check(stage="finish", base_ref=<任务起点>, test_command=..., memory_written=True)`；
+- 配套：`approval_record`（记录你的前端批准）、`worktree_manage`（并行隔离）、`memory_*`（长期记忆）、`context_refresh`、`project_init`。
+
+**3. 终端里直接用 CLI（现在就能用）**
+
+```powershell
+aios doctor --json                      # 体检：环境 + 插件声明状态
+aios init <项目> --project-id PROJECT-001 --name example
+aios check .                            # 预看当前阻塞原因
+aios finish . --base-ref <任务起点sha> --change-class bugfix --test-command "pytest" --memory-written
+aios worktree prepare|check|finish|cleanup|list
+aios memory search|record|reindex|candidates|candidate <id> --accept
+aios approval record --project-root . --gate frontend --subject frontend --scope <范围> --decided-by <你> --decision approved
+aios context refresh .
+aios migrate <项目>                     # 把 Codex 时代的 .codex-os 项目搬到 .aios
+```
+
+新项目纳入治理：`aios init <目录>` 会生成 `.aios/project.yaml`、最小文档骨架与运行库。不初始化也可以——Tier 0 基线与 Tier 2 严格模式照样约束它。
+
+### 关掉严格模式
+
+`strict: true`（默认）会让**未初始化项目**同样受 Gate 约束——例如任何项目写 `src/` 都需要可达的 GitHub remote。如果这太激进，把 `~/.dsh/profiles/<profile>/cordis.patch.yml` 里 `ai-engineering-os` 条目的 `strict` 改成 `false`，未初始化项目就只受 Tier 0 基线约束（受保护路径 + 用户资产保护 + Memory 单写者）。
+
 ## 本地开发
 
 ```powershell
