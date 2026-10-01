@@ -174,6 +174,11 @@ def _test_command_findings(root: Path, test_command: str | None) -> list[GateFin
             cwd=root,
             capture_output=True,
             text=True,
+            # Children follow the repository's UTF-8 stdio contract; decoding
+            # with the OS locale would raise on the first non-ASCII byte and
+            # turn a real result into an unreadable failure.
+            encoding="utf-8",
+            errors="replace",
             timeout=TEST_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:
@@ -220,6 +225,8 @@ def _ruff_findings(root: Path) -> list[GateFinding]:
             cwd=root,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=RUFF_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:
