@@ -5,7 +5,7 @@ import inspect
 import re
 from pathlib import Path
 
-from codex_ai_os.cli import mcp_server
+from aios.cli import mcp_server
 
 EXPECTED_SKILLS = {
     "governance-entry",
@@ -63,7 +63,7 @@ def test_skill_python_examples_match_real_mcp_signatures() -> None:
 
 
 def test_research_example_satisfies_document_contract(tmp_path: Path) -> None:
-    from codex_ai_os.core.gates import _research_findings
+    from aios.core.gates import _research_findings
 
     text = (SKILLS_ROOT / "open-source-research/SKILL.md").read_text(encoding="utf-8")
     example = re.search(r"```markdown\n(.*?)```", text, re.S)

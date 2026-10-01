@@ -3,6 +3,45 @@ revision = 3
 requires-python = "==3.12.*"
 
 [[package]]
+name = "aios-governance"
+version = "1.0.0"
+source = { editable = "." }
+dependencies = [
+    { name = "mcp" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "typer" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "detect-secrets" },
+    { name = "hatchling" },
+    { name = "pyright", extra = ["nodejs"] },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mcp", specifier = ">=2,<3" },
+    { name = "pydantic", specifier = ">=2.11,<3" },
+    { name = "pyyaml", specifier = ">=6.0.2,<7" },
+    { name = "typer", specifier = ">=0.16,<1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "detect-secrets", specifier = ">=1.5,<2" },
+    { name = "hatchling", specifier = ">=1.27,<2" },
+    { name = "pyright", extras = ["nodejs"], specifier = ">=1.1.403,<2" },
+    { name = "pytest", specifier = ">=8.3,<10" },
+    { name = "pytest-cov", specifier = ">=6,<8" },
+    { name = "ruff", specifier = ">=0.12,<1" },
+]
+
+[[package]]
 name = "annotated-doc"
 version = "0.0.5"
 source = { registry = "https://pypi.org/simple" }
@@ -125,45 +164,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/76/d4/81420972a676e8ffea40450d8c8c92943e7218a78fe9b64359836cc9876b/click-8.4.2.tar.gz", hash = "sha256:9a6cea6e60b17ebe0a44c5cc636d94f09bd66142c1cd7d8b4cd731c4917a15f6", size = 338000, upload-time = "2026-06-24T17:45:15.148Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fb/e2/79c688af8b210d232694e31e59da9f6ec747bae31c3f5946e4e9b98860d5/click-8.4.2-py3-none-any.whl", hash = "sha256:e6f9f66136c816745b9d65817da91d61d957fb16e02e4dcd0552553c5a197b76", size = 119243, upload-time = "2026-06-24T17:45:13.73Z" },
-]
-
-[[package]]
-name = "codex-ai-engineering-os"
-version = "1.0.0"
-source = { editable = "." }
-dependencies = [
-    { name = "mcp" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-    { name = "typer" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "detect-secrets" },
-    { name = "hatchling" },
-    { name = "pyright", extra = ["nodejs"] },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "mcp", specifier = ">=2,<3" },
-    { name = "pydantic", specifier = ">=2.11,<3" },
-    { name = "pyyaml", specifier = ">=6.0.2,<7" },
-    { name = "typer", specifier = ">=0.16,<1" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "detect-secrets", specifier = ">=1.5,<2" },
-    { name = "hatchling", specifier = ">=1.27,<2" },
-    { name = "pyright", extras = ["nodejs"], specifier = ">=1.1.403,<2" },
-    { name = "pytest", specifier = ">=8.3,<10" },
-    { name = "pytest-cov", specifier = ">=6,<8" },
-    { name = "ruff", specifier = ">=0.12,<1" },
 ]
 
 [[package]]

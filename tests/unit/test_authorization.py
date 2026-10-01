@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from codex_ai_os.application.authorization import (
+from aios.application.authorization import (
     HOST_COMMAND_RULES,
     AuthorizationDecision,
     AuthorizationOperation,
     AuthorizationRequest,
     GovernanceAuthorizationKernel,
 )
-from codex_ai_os.application.governance_policy import GovernancePolicyCompiler
-from codex_ai_os.application.project import ProjectInitializer
-from codex_ai_os.domain.config import ProjectType
+from aios.application.governance_policy import GovernancePolicyCompiler
+from aios.application.project import ProjectInitializer
+from aios.domain.config import ProjectType
 
 
 def _kernel(tmp_path: Path) -> GovernanceAuthorizationKernel:
@@ -65,7 +65,7 @@ def test_output_directory_is_writable(tmp_path: Path) -> None:
 
 def test_governance_rule_files_are_denied(tmp_path: Path) -> None:
     kernel = _kernel(tmp_path)
-    for path in ("AGENTS.md", ".codex-os/project.yaml", "plugins/ai-engineering-os/x.py"):
+    for path in ("AGENTS.md", ".aios/project.yaml", "plugins/ai-engineering-os/x.py"):
         outcome = kernel.authorize(
             AuthorizationRequest(
                 operation="write",
@@ -78,7 +78,7 @@ def test_governance_rule_files_are_denied(tmp_path: Path) -> None:
 
 def test_env_and_state_are_denied(tmp_path: Path) -> None:
     kernel = _kernel(tmp_path)
-    for path in (".env", "config/.env", ".codex-os/state/state.db"):
+    for path in (".env", "config/.env", ".aios/state/state.db"):
         outcome = kernel.authorize(
             AuthorizationRequest(
                 operation="write",

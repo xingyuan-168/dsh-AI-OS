@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from codex_ai_os.adapters.git import GitRunner
+from aios.adapters.git import GitRunner
 
 
 def _init_repository(root: Path) -> None:

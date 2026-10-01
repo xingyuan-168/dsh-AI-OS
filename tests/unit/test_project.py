@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from codex_ai_os.application.project import ProjectInitializer
-from codex_ai_os.domain.config import GitPushPolicy, ProjectType
+from aios.application.project import ProjectInitializer
+from aios.domain.config import GitPushPolicy, ProjectType
 
 
 def test_initialize_creates_baseline(tmp_path: Path) -> None:
@@ -15,7 +15,7 @@ def test_initialize_creates_baseline(tmp_path: Path) -> None:
         include=frozenset(),
     )
     for relative in (
-        ".codex-os/project.yaml",
+        ".aios/project.yaml",
         ".gitignore",
         "AGENTS.md",
         "README.md",
@@ -62,7 +62,7 @@ def test_initialize_is_idempotent(tmp_path: Path) -> None:
         project_type=ProjectType.GENERIC,
         include=frozenset(),
     )
-    assert ".codex-os/project.yaml" not in second.created_paths
+    assert ".aios/project.yaml" not in second.created_paths
     assert "AGENTS.md" not in second.created_paths
     assert first.config.project_id == second.config.project_id
 

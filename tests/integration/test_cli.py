@@ -7,7 +7,7 @@ from typing import Any, cast
 
 from typer.testing import CliRunner
 
-from codex_ai_os.cli.app import app
+from aios.cli.app import app
 
 runner = CliRunner()
 
@@ -63,7 +63,7 @@ def test_check_blocks_without_git(tmp_path: Path) -> None:
 
 
 def test_check_passes_when_github_is_ready(tmp_path: Path, monkeypatch: Any) -> None:
-    import codex_ai_os.application.repository as repository_module
+    import aios.application.repository as repository_module
 
     monkeypatch.setattr(repository_module, "_github_findings", lambda git, hosts: [])
     runner.invoke(app, ["init", str(tmp_path), "--project-id", "PROJECT-OK", "--json"])
@@ -236,7 +236,7 @@ def test_worktree_lifecycle_via_cli(tmp_path: Path) -> None:
     )
     assert prepared.exit_code == 0, prepared.output
     payload = _json_output(prepared.output)
-    assert payload["data"]["branch"] == "codex/wt-demo"
+    assert payload["data"]["branch"] == "aios/wt-demo"
     finished = runner.invoke(
         app, ["worktree", "finish", "demo", "--project-root", str(tmp_path), "--json"]
     )

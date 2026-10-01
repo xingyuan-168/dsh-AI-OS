@@ -3,9 +3,9 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from codex_ai_os.application.project import ProjectInitializer
-from codex_ai_os.application.repository import RepositoryGovernanceService
-from codex_ai_os.domain.config import ProjectType
+from aios.application.project import ProjectInitializer
+from aios.application.repository import RepositoryGovernanceService
+from aios.domain.config import ProjectType
 
 
 def _initialize(root: Path) -> None:
@@ -91,7 +91,7 @@ def test_incomplete_gitignore_lists_missing_items(tmp_path: Path) -> None:
     finding = next((f for f in report.findings if f.code == "GITIGNORE_INCOMPLETE"), None)
     assert finding is not None and finding.blocking
     assert "__pycache__" in finding.message
-    assert ".codex-os/state" in finding.message
+    assert ".aios/state" in finding.message
     assert ".worktrees" in finding.message
 
 
@@ -103,7 +103,7 @@ def test_gitignore_equivalent_spellings_pass(tmp_path: Path) -> None:
     (tmp_path / ".gitignore").write_text(
         "**/__pycache__/\n*.py[cod]\n/.pytest_cache/\n**/.ruff_cache/\n"
         ".venv/**\n/node_modules/\nbuild/\n/dist\n*.log\n"
-        ".codex-os/**\n.worktrees/**\n",
+        ".aios/**\n.worktrees/**\n",
         encoding="utf-8",
     )
     subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)

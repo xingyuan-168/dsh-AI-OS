@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from codex_ai_os.infrastructure.database import Database, MigrationError
+from aios.infrastructure.database import Database, MigrationError
 
 
 def test_migrate_is_idempotent(tmp_path: Path) -> None:

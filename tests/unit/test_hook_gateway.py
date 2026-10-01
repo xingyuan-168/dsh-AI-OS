@@ -10,18 +10,18 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from codex_ai_os.application.hook_gateway import (
+from aios.application.hook_gateway import (
     authorize_hook_payload,
     parse_apply_patch_paths,
 )
-from codex_ai_os.cli.app import app
-from codex_ai_os.core.gates import GateDecision, GateName
+from aios.cli.app import app
+from aios.core.gates import GateDecision, GateName
 
 RUNNER = CliRunner()
 
 
 def _initialized_project(tmp_path: Path, *, with_remote: bool = False) -> Path:
-    config = tmp_path / ".codex-os" / "project.yaml"
+    config = tmp_path / ".aios" / "project.yaml"
     config.parent.mkdir(parents=True, exist_ok=True)
     config.write_text(
         "schema_version: '1.2'\nproject_id: PROJECT-HOOK\nname: hook-fixture\nroot: .\n"
@@ -78,7 +78,7 @@ def _patch_output(root: Path, verb: str, path: str) -> dict[str, Any]:
 
 
 def _blocked_start(code: str = "GITHUB_REMOTE_MISSING") -> GateDecision:
-    from codex_ai_os.core.gates import GateFinding
+    from aios.core.gates import GateFinding
 
     return GateDecision(
         gate=GateName.CODE_START,
@@ -127,6 +127,10 @@ class TestAuthorizeHookPayload:
         assert authorize_hook_payload(_payload(root, "read_file", "x")) == {}
 
     def test_ignores_uninitialized_projects(self, tmp_path: Path) -> None:
+        # "Uninitialized" means a repository without governance config. The
+        # boundary is explicit because root resolution otherwise walks up to
+        # the repository hosting this test, which is itself initialized.
+        (tmp_path / ".git").mkdir()
         assert authorize_hook_payload(_payload(tmp_path, "apply_patch", "*** Begin Patch")) == {}
 
     def test_apply_patch_protected_path_denies(self, tmp_path: Path) -> None:
@@ -176,7 +180,7 @@ class TestAuthorizeHookPayload:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         root = _initialized_project(tmp_path)
-        import codex_ai_os.application.hook_gateway as gateway
+        import aios.application.hook_gateway as gateway
 
         monkeypatch.setattr(
             gateway, "_formal_boundary", lambda root, github_hosts, **kwargs: _allowed_start()
@@ -188,7 +192,7 @@ class TestAuthorizeHookPayload:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         root = _initialized_project(tmp_path)
-        import codex_ai_os.application.hook_gateway as gateway
+        import aios.application.hook_gateway as gateway
 
         monkeypatch.setattr(
             gateway,
@@ -209,7 +213,7 @@ class TestAuthorizeHookPayload:
         _git(root, "add", "src/auth.py")
         _git(root, "commit", "-m", "baseline")
         (root / "src" / "auth.py").write_text("x = 2\n", encoding="utf-8")
-        import codex_ai_os.application.hook_gateway as gateway
+        import aios.application.hook_gateway as gateway
 
         monkeypatch.setattr(
             gateway, "_formal_boundary", lambda root, github_hosts, **kwargs: _allowed_start()
@@ -220,11 +224,11 @@ class TestAuthorizeHookPayload:
 
     def test_shell_redirect_into_protected_path_denies(self, tmp_path: Path) -> None:
         root = _initialized_project(tmp_path)
-        command = "echo test > .codex-os/state/state.db"
+        command = "echo test > .aios/state/state.db"
         output = authorize_hook_payload(_payload(root, "Bash", command))
         decision = output["hookSpecificOutput"]
         assert decision["permissionDecision"] == "deny"
-        assert ".codex-os/state/state.db" in decision["permissionDecisionReason"]
+        assert ".aios/state/state.db" in decision["permissionDecisionReason"]
 
     def test_shell_append_into_normal_path_allows(self, tmp_path: Path) -> None:
         root = _initialized_project(tmp_path)
@@ -254,7 +258,7 @@ class TestAuthorizeHookCommand:
             app,
             ["authorize-hook"],
             input=json.dumps(
-                _payload(root, "apply_patch", _patch("add", ".codex-os/state/inject.db"))
+                _payload(root, "apply_patch", _patch("add", ".aios/state/inject.db"))
             ),
         )
         assert result.exit_code == 0

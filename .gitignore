@@ -15,12 +15,13 @@ dist/
 node_modules/
 
 # AI Engineering OS runtime state
-.codex-os/state/
-.codex-os/logs/
-.codex-os/cache/
-.codex-os/context/
-.codex-os/tmp/
-.codex-os/artifacts/
+.aios/state/
+.aios/logs/
+.aios/cache/
+.aios/context/
+.aios/tmp/
+.aios/artifacts/
+.aios/pytest/
 .worktrees/
 
 # Local secrets and editor state

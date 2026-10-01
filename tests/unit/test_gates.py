@@ -3,15 +3,15 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from codex_ai_os.adapters.git import GitRunner
-from codex_ai_os.core.gates import (
+from aios.adapters.git import GitRunner
+from aios.core.gates import (
     evaluate_code_start,
     evaluate_finish,
     evaluate_frontend,
     formal_write_blockers,
     write_frontend_approval,
 )
-from codex_ai_os.domain.config import ProjectType
+from aios.domain.config import ProjectType
 
 REQUIREMENT = "REQ-TEST"
 
@@ -407,7 +407,7 @@ def test_finish_without_test_command_still_checks_the_rest(tmp_path: Path) -> No
 
 
 def _initialized_finish_project(tmp_path: Path) -> None:
-    from codex_ai_os.application.project import ProjectInitializer
+    from aios.application.project import ProjectInitializer
 
     ProjectInitializer().initialize(
         tmp_path,

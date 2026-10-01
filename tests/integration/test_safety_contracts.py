@@ -8,15 +8,15 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from codex_ai_os.adapters.git import GitRunner
-from codex_ai_os.application.project import ProjectInitializer
-from codex_ai_os.cli.app import app
-from codex_ai_os.cli.mcp_server import approval_record, governance_check, project_init
-from codex_ai_os.core.gates import evaluate_frontend
-from codex_ai_os.core.worktree import WorktreeManager
-from codex_ai_os.domain.config import ProjectType
-from codex_ai_os.infrastructure.database import Database
-from codex_ai_os.infrastructure.memory import MemoryStore, MemoryStoreError
+from aios.adapters.git import GitRunner
+from aios.application.project import ProjectInitializer
+from aios.cli.app import app
+from aios.cli.mcp_server import approval_record, governance_check, project_init
+from aios.core.gates import evaluate_frontend
+from aios.core.worktree import WorktreeManager
+from aios.domain.config import ProjectType
+from aios.infrastructure.database import Database
+from aios.infrastructure.memory import MemoryStore, MemoryStoreError
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -41,7 +41,7 @@ def test_initializer_preserves_existing_input_assets(tmp_path: Path) -> None:
 
 
 def test_cli_and_mcp_explicit_migration_never_initialize_documents(governed_repo: Path) -> None:
-    database = Database(governed_repo / ".codex-os/state/state.db")
+    database = Database(governed_repo / ".aios/state/state.db")
     database.migrate()
     before = {
         str(p.relative_to(governed_repo)): p.read_bytes()
@@ -73,7 +73,7 @@ def test_mcp_rejection_revokes_even_when_index_is_unavailable(governed_repo: Pat
     )
     assert approval_record(**args, decision="approved")["ok"]
     assert evaluate_frontend(governed_repo, impact="new_page", scope="test").allowed
-    database = Database(governed_repo / ".codex-os/state/state.db")
+    database = Database(governed_repo / ".aios/state/state.db")
     with database.connection() as connection:
         connection.execute("CREATE TABLE user_asset (id TEXT)")
     rejected = approval_record(**args, decision="rejected")
@@ -83,7 +83,7 @@ def test_mcp_rejection_revokes_even_when_index_is_unavailable(governed_repo: Pat
 
 
 def test_registered_worktree_cli_mcp_and_memory_context(governed_repo: Path) -> None:
-    database = Database(governed_repo / ".codex-os/state/state.db")
+    database = Database(governed_repo / ".aios/state/state.db")
     database.migrate()
     manager = WorktreeManager(governed_repo, database=database)
     manager.prepare(name="context")
@@ -129,11 +129,11 @@ def test_secret_scan_missing_and_staged_content(
 
 
 def test_index_failure_preserves_jsonl_and_candidate(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    project_root: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    database = Database(tmp_path / "state.db")
+    database = Database(project_root / "state.db")
     database.migrate()
-    store = MemoryStore(database, tmp_path)
+    store = MemoryStore(database, project_root)
     entry = store.record_candidate(record_type="bug", title="Recover", summary="s", source="x.py")
     original = store._reindex_locked
 

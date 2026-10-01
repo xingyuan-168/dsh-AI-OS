@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from codex_ai_os.adapters.git import GitRunner
-from codex_ai_os.core.worktree import WorktreeError, WorktreeManager
-from codex_ai_os.infrastructure.database import Database
+from aios.adapters.git import GitRunner
+from aios.core.worktree import WorktreeError, WorktreeManager
+from aios.infrastructure.database import Database
 
 
 def _git_repo(root: Path) -> None:
@@ -23,7 +23,7 @@ def _git_repo(root: Path) -> None:
 
 
 def _manager(root: Path) -> WorktreeManager:
-    database = Database(root / ".codex-os" / "state.db")
+    database = Database(root / ".aios" / "state.db")
     database.migrate()
     return WorktreeManager(root, database=database)
 
@@ -38,7 +38,7 @@ def test_prepare_check_finish_cleanup_cycle(tmp_path: Path) -> None:
     manager = _manager(tmp_path)
     record = manager.prepare(name="demo", task_id="TASK-1")
     assert record.name == "demo"
-    assert record.branch == "codex/wt-demo"
+    assert record.branch == "aios/wt-demo"
     assert record.status == "active"
     assert record.target_branch == "main"
     assert (tmp_path / ".worktrees" / "demo").is_dir()
@@ -92,7 +92,7 @@ def test_cleanup_refuses_unmerged_then_allows_after_merge(tmp_path: Path) -> Non
     assert (tmp_path / ".worktrees" / "feat").exists()
 
     subprocess.run(
-        ["git", "merge", "-q", "--no-ff", "-m", "merge feature", "codex/wt-feat"],
+        ["git", "merge", "-q", "--no-ff", "-m", "merge feature", "aios/wt-feat"],
         cwd=tmp_path,
         check=True,
     )
@@ -180,7 +180,7 @@ def test_registration_failure_only_recovers_unchanged_new_objects(
         assert (path / "user-work.txt").read_text() == "keep"
     else:
         assert (
-            manager.git.run("show-ref", "--verify", "refs/heads/codex/wt-unregistered").returncode
+            manager.git.run("show-ref", "--verify", "refs/heads/aios/wt-unregistered").returncode
             != 0
         )
 

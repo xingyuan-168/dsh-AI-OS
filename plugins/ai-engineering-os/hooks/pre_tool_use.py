@@ -11,8 +11,8 @@ from typing import Any
 
 
 def run_hook(payload: dict[str, Any]) -> dict[str, Any]:
-    executable = shutil.which("codex-os")
-    code, detail = "AIOS_RUNTIME_UNAVAILABLE", "codex-os is not installed or not on PATH"
+    executable = shutil.which("aios")
+    code, detail = "AIOS_RUNTIME_UNAVAILABLE", "aios is not installed or not on PATH"
     if executable:
         try:
             result = subprocess.run(

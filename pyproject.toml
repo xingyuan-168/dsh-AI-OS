@@ -3,9 +3,9 @@ requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [project]
-name = "codex-ai-engineering-os"
+name = "aios-governance"
 version = "1.0.0"
-description = "Codex engineering governance layer: three stateless gates, worktrees, and memory"
+description = "DeepSeek Harness engineering governance layer: three stateless gates, worktrees, and memory"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-codex-os = "codex_ai_os.cli.app:main"
+aios = "aios.cli.app:main"
 
 [dependency-groups]
 dev = [
@@ -29,11 +29,11 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/codex_ai_os"]
+packages = ["src/aios"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-  "src/codex_ai_os",
+  "src/aios",
   "tests",
   "docs",
   "plugins",
@@ -46,7 +46,7 @@ include = [
   ".gitignore",
 ]
 exclude = [
-  ".codex-os",
+  ".aios",
   ".worktrees",
   "dist",
   ".venv",
@@ -57,12 +57,15 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "--strict-config --strict-markers"
+# Test artifacts belong inside the governed runtime area: the repository root
+# would otherwise collect copy-style fixtures that the hygiene gate must flag.
+# This is deliberately not .aios/tmp, which cleanup rules treat as disposable.
+addopts = "--strict-config --strict-markers --basetemp=.aios/pytest"
 testpaths = ["tests"]
 
 [tool.coverage.run]
 branch = true
-source = ["codex_ai_os"]
+source = ["aios"]
 
 [tool.ruff]
 line-length = 100
@@ -72,7 +75,7 @@ target-version = "py312"
 select = ["B", "E", "F", "I", "RUF", "SIM", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
-"src/codex_ai_os/templates/*.py" = ["E501", "RUF001"]
+"src/aios/templates/*.py" = ["E501", "RUF001"]
 
 [tool.pyright]
 include = ["src", "tests"]

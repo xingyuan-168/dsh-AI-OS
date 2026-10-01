@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from codex_ai_os.infrastructure.documents import DocumentManager, PathDeniedError
+from aios.infrastructure.documents import DocumentManager, PathDeniedError
 
 
 def test_initialize_and_check_baseline(tmp_path: Path) -> None:

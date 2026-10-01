@@ -8,12 +8,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from codex_ai_os.adapters.git import GitRunner
-from codex_ai_os.application import cleanup_policy
-from codex_ai_os.application.hook_gateway import authorize_hook_payload, explain_hook_payload
-from codex_ai_os.cli.app import app
-from codex_ai_os.core.gates import evaluate_finish, evaluate_frontend, write_frontend_approval
-from codex_ai_os.infrastructure.config import resolve_runtime_root
+from aios.adapters.git import GitRunner
+from aios.application import cleanup_policy
+from aios.application.hook_gateway import authorize_hook_payload, explain_hook_payload
+from aios.cli.app import app
+from aios.core.gates import evaluate_finish, evaluate_frontend, write_frontend_approval
+from aios.infrastructure.config import resolve_runtime_root
 
 
 def payload(cwd: Path, command: str, tool: str = "Bash") -> dict:
@@ -208,8 +208,8 @@ def test_finish_checks_staged_whitespace(governed_repo: Path) -> None:
 def test_finish_empty_tree_for_unborn_repo(tmp_path: Path) -> None:
     git = GitRunner(tmp_path)
     git.run("init", "-q")
-    (tmp_path / ".codex-os").mkdir()
-    (tmp_path / ".codex-os/project.yaml").write_text(
+    (tmp_path / ".aios").mkdir()
+    (tmp_path / ".aios/project.yaml").write_text(
         "project_id: PROJECT-EMPTY\nname: Empty\nroot: .\n", encoding="utf-8"
     )
     result = evaluate_finish(

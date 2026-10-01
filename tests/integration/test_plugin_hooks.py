@@ -12,9 +12,9 @@ from typing import Any
 
 import pytest
 
-from codex_ai_os.application.hook_gateway import authorize_hook_payload
-from codex_ai_os.core.worktree import WorktreeManager
-from codex_ai_os.infrastructure.database import Database
+from aios.application.hook_gateway import authorize_hook_payload
+from aios.core.worktree import WorktreeManager
+from aios.infrastructure.database import Database
 
 HOOK_PATH = Path(__file__).resolve().parents[2] / "plugins/ai-engineering-os/hooks/pre_tool_use.py"
 _spec = importlib.util.spec_from_file_location("pre_tool_use", HOOK_PATH)
@@ -50,7 +50,7 @@ def payload(
 def test_invalid_runtime_output_fails_closed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output: str
 ) -> None:
-    monkeypatch.setattr(hook.shutil, "which", lambda name: "codex-os")
+    monkeypatch.setattr(hook.shutil, "which", lambda name: "aios")
     monkeypatch.setattr(
         hook.subprocess, "run", lambda *args, **kw: subprocess.CompletedProcess(args, 0, output, "")
     )
@@ -64,13 +64,13 @@ def test_runtime_failure_denies_writes_with_reason(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
 ) -> None:
     monkeypatch.setattr(
-        hook.shutil, "which", lambda name: None if failure == "missing" else "codex-os"
+        hook.shutil, "which", lambda name: None if failure == "missing" else "aios"
     )
 
     def run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
         assert kwargs["timeout"] == 10
         if failure == "timeout":
-            raise subprocess.TimeoutExpired("codex-os", 10)
+            raise subprocess.TimeoutExpired("aios", 10)
         if failure == "oserror":
             raise OSError("fixture unavailable")
         return subprocess.CompletedProcess(args, 1, "", "")
@@ -93,7 +93,7 @@ def test_missing_runtime_does_not_claim_read_checks_passed(
 def test_bridge_returns_valid_runtime_response(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(hook.shutil, "which", lambda name: "codex-os")
+    monkeypatch.setattr(hook.shutil, "which", lambda name: "aios")
     for response in (
         {},
         {
@@ -146,7 +146,7 @@ def test_native_engineering_commands_remain_native(governed_repo: Path, command:
 
 
 def test_registered_worktree_and_single_writer(governed_repo: Path) -> None:
-    database = Database(governed_repo / ".codex-os/state/state.db")
+    database = Database(governed_repo / ".aios/state/state.db")
     database.migrate()
     manager = WorktreeManager(governed_repo, database=database)
     manager.prepare(name="hook-check")

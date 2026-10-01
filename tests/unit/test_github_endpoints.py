@@ -2,9 +2,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from codex_ai_os.application.repository import _github_findings as repository_findings
-from codex_ai_os.core.gates import _github_findings as gate_findings
-from codex_ai_os.core.github_remote import remote_host
+from aios.application.repository import _github_findings as repository_findings
+from aios.core.gates import _github_findings as gate_findings
+from aios.core.github_remote import remote_host
 
 
 @pytest.mark.parametrize(

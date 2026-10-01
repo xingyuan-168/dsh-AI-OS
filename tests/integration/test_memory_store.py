@@ -6,11 +6,23 @@ from pathlib import Path
 
 import pytest
 
-from codex_ai_os.infrastructure.database import Database
-from codex_ai_os.infrastructure.memory import MemoryStore, MemoryStoreError
+from aios.infrastructure.database import Database
+from aios.infrastructure.memory import MemoryStore, MemoryStoreError
+
+_PROJECT_CONFIG = (
+    "schema_version: '1.3'\nproject_id: PROJECT-TEST\nname: Test\nroot: .\ncode_paths: [src]\n"
+)
 
 
 def _store(tmp_path: Path) -> MemoryStore:
+    # MemoryStore resolves its governing root by walking up to the nearest
+    # ``.git`` or ``.aios/project.yaml``. pytest's temporary root lives inside
+    # this repository (the OS temp directory is not writable from the project
+    # interpreter), so the fixture needs its own boundary: without it these
+    # tests would read and write the repository's tracked memory file.
+    config = tmp_path / ".aios" / "project.yaml"
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text(_PROJECT_CONFIG, encoding="utf-8")
     database = Database(tmp_path / "state.db")
     database.migrate()
     return MemoryStore(database, tmp_path)
