@@ -1,9 +1,10 @@
-"""
 # 接口契约
 
-MCP 与 CLI 共享实现和业务响应封装（`{ok, data} / {ok:false, error:{code,message}}`）。项目参数允许根、子目录或登记 Worktree；共用解析器区分当前 checkout 与协调根。文件目标支持相对/绝对路径，并独立验证所属项目。无模型推理。
+DSH 工具、MCP 与 CLI 共享实现和业务响应封装（`{ok, data} / {ok:false, error:{code,message}}`）。项目参数允许根、子目录或登记 Worktree；共用解析器区分当前 checkout 与协调根。文件目标支持相对/绝对路径，并独立验证所属项目。无模型推理。
 
-## MCP 工具（8）
+## DSH 工具（8）
+
+插件通过 `ctx.tools.register` 暴露，语义与 MCP 工具完全一致：
 
 | 工具 | 参数 | 语义 |
 | --- | --- | --- |
@@ -16,16 +17,27 @@ MCP 与 CLI 共享实现和业务响应封装（`{ok, data} / {ok:false, error:{
 | memory_record | project_root, record_type, title, summary, source, source_commit?, tags?, candidate? | 写 JSONL（主会话）或提交 candidate（子 Agent） |
 | memory_candidate | project_root, action=list\|accept\|reject, candidate_id? | 主会话处理子 Agent candidate：列表 / 并入 JSONL / 丢弃 |
 
-## CLI 命令（7 + 1 桥）
+## DSH 宿主契约
 
-`codex-os init / check / finish / memory search|record|reindex|candidates|candidate / worktree prepare|check|finish|cleanup|list / mcp / doctor / authorize-hook`。
+- **事件监听**：`tools/pre-execute`（工具调用前裁决）、`fs/write-intent`、`fs/edit-intent`（写入时刻裁决）、`agent/created`（会话建立）。
+- **人工命令**：`/aios-check`、`/aios-finish`、`/aios-status`、`/aios-memory`，经 `ctx.commands.register` 注册。
+- **Skill Provider**：`ctx.skills.registerProvider` 读取 `plugins/ai-engineering-os/skills/*/SKILL.md`。
+- **提示注入**：`ctx.systemPrompt.section` 输出宪法摘要与当前 Gate 状态。
+- **插件配置**：`strict`（默认 true）、`uninitializedProjects`（默认 `strict`）、`kernelCommand`（默认 `aios`）、`timeoutMs`（默认 10000）、`failMode`（默认 `closed`）。
+- **全局策略**：`~/.dsh/aios.yaml` 提供 `strict`、`uninitialized_projects`、`governed_roots`。
+
+## CLI 命令
+
+`aios init / check / finish / migrate / approval record / context refresh / memory search|record|reindex|candidates|candidate / worktree prepare|check|finish|cleanup|list / mcp / doctor / authorize-dsh`。
 
 - `check [--change-class --requirement-id]` = 仓库治理（GitHub 就绪 + 卫生 + output 纯净 + .gitignore 合规）+ docs 检查 + Code Start 预览（含调研分层），阻塞退出码 40。
 - `finish --base-ref <task-start-ref> [--change-class bugfix] [--test-command "..."] --memory-written|--memory-not-needed` = Finish Gate；缺少基线或其他阻塞退出码 40，空仓库基线为 EMPTY_TREE。
+- `migrate <project-root>` = 把 `.codex-os/` 迁移到 `.aios/`（一致性备份 + 移动，非复制）；未知结构拒绝，无 force 兜底。`init --migrate-runtime` 仍只迁移已知旧库。
+- `authorize-dsh` = stdin DSH 载荷 → `{decision, rule_id, targets, reason, next_step}`；`--explain` 只读诊断，不执行操作，也不代表宿主授权。
+- `approval record` / `context refresh` = 补齐与 DSH 工具面同构的终端入口，复用同一用例。
 - `init <project-root> --migrate-runtime` 只迁移已知旧库；见 DATABASE.md。正常 init 不向已有 input/ 补写 .gitkeep。
-- `authorize-hook` = stdin JSON → 官方 Hook JSON；无阻塞输出 `{}`，拒绝只使用 deny，不使用 ask/allow 代替宿主授权。`--explain` 输出业务 envelope，其 data 含 layer=aios、decision、rule_id、targets、reason、next_step；不执行命令。
-- Doctor 的 `ok: null` 表示未知（插件安装/Hook 信任/当前任务加载不能由本地文件证明）；必需 SQLite 检查不再要求未使用的 FTS5。
+- Doctor 的 `ok: null` 表示未知（插件安装/加载不能由本地文件证明）；必需 SQLite 检查不再要求未使用的 FTS5。
 
 ## 错误码
 
-配置类 CONFIG_INVALID；Gate 类返回 findings（code/message/path/blocking），决策本身不报错；Memory 类 MEMORY_*；Worktree 类 WORKTREE_*；数据库类 MIGRATION_*。
+配置类 CONFIG_INVALID；Gate 类返回 findings（code/message/path/blocking），决策本身不报错；Memory 类 MEMORY_*；Worktree 类 WORKTREE_*；数据库类 MIGRATION_*；宿主桥类 AIOS_RUNTIME_UNAVAILABLE / AIOS_RUNTIME_TIMEOUT / AIOS_RUNTIME_INVALID_RESPONSE。

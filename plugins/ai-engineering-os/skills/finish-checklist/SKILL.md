@@ -11,7 +11,7 @@ Run these in order, then use the task's captured starting commit. Missing `base_
 governance_check(project_root="<project-root>", stage="finish", base_ref="<task-start-sha>", change_class="bugfix", test_command="pytest", memory_not_needed=True)
 ```
 
-CLI: `codex-os finish <project-root> --base-ref <task-start-sha> --change-class bugfix --test-command "pytest" --memory-not-needed`. Use `memory_written=True` instead when durable memory was recorded. Supply `requirement_id` for research-required changes. Checks cover committed, staged, unstaged and untracked paths.
+CLI: `aios finish <project-root> --base-ref <task-start-sha> --change-class bugfix --test-command "pytest" --memory-not-needed`. Use `memory_written=True` instead when durable memory was recorded. Supply `requirement_id` for research-required changes. Checks cover committed, staged, unstaged and untracked paths.
 
 1. **Targeted tests** — run the narrowest tests covering the changed requirements; they must pass. No full-suite re-runs of unrelated subsets.
 2. **Document sync** — every document affected by this change is updated (document-impact skill).

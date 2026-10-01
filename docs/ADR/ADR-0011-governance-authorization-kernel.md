@@ -1,6 +1,6 @@
 # ADR-0011：统一治理授权内核与三层强制模型
 
-<!-- codex-os-document: {"schema_version":"1.2","document_version":"0.3.0","status":"accepted","owner":"architect","requirement_refs":["GOV-001","REPO-001","HYGIENE-001"]} -->
+<!-- aios-document: {"schema_version":"1.3","document_version":"0.3.0","status":"accepted","owner":"architect","requirement_refs":["GOV-001","REPO-001","HYGIENE-001"]} -->
 
 - 状态：部分 Superseded（2026-09，ADR-0016 与行为权限精简）——唯一授权内核与"只判操作"原则保留；BASELINE_ROLE_BOUNDARIES/policy_hash/InvocationContext workflow_id/task_id/第三层证据绑定已删除，仅存历史
 - 日期：2026-09-08

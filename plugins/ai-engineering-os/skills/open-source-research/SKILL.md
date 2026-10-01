@@ -48,5 +48,5 @@ reason: Explain why the inspected candidates do not meet the scoped requirement.
 governance_check(project_root="<project-root>", stage="start", change_class="major_feature", requirement_id="REQ-EXAMPLE")
 ```
 - No supply-chain audits, SBOMs, or fixed field matrices for candidates you rejected.
-- Never introduce a new agent runtime (LangGraph, CrewAI, MetaGPT, OpenHands) as a dependency; Codex already provides agent capability.
+- Never introduce a new agent runtime (LangGraph, CrewAI, MetaGPT, OpenHands) as a dependency; DSH already provides agent capability.
 - Cite URLs so the decision stays auditable.

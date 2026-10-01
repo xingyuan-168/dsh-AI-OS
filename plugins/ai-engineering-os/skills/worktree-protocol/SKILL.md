@@ -1,11 +1,11 @@
 ---
 name: worktree-protocol
-description: Isolate parallel or risky task work in a disposable Git worktree under .worktrees/ with Codex-native subagents. Use when tasks would write overlapping paths in parallel, or when a long experiment should not touch the main worktree. Not needed for ordinary sequential work.
+description: Isolate parallel or risky task work in a disposable Git worktree under .worktrees/ with DSH-native subagents. Use when tasks would write overlapping paths in parallel, or when a long experiment should not touch the main worktree. Not needed for ordinary sequential work.
 ---
 
 # Worktree protocol
 
-Codex stays in charge of deciding when to use subagents and how to split work. AIOS only keeps parallel writes isolated and registered.
+DSH stays in charge of deciding when to use subagents and how to split work. AIOS only keeps parallel writes isolated and registered.
 
 ## Prepare
 
@@ -21,7 +21,7 @@ Worktrees live under `.worktrees/`. Both the runtime registration and Git's real
 ## During
 
 - Local Git discard commands are allowed only in the registered disposable checkout; force push and shared-ref deletion remain forbidden. File cleanup is judged by its actual target, never merely by cwd. The whole checkout and tracked files are not automatic cleanup targets.
-- Subagents do not write `docs/memory/`; submit candidates with `codex-os memory record --candidate` and let the main session merge at finish.
+- Subagents do not write `docs/memory/`; submit candidates with `aios memory record --candidate` and let the main session merge at finish.
 
 ## Finish and cleanup
 

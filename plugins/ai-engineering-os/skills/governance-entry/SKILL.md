@@ -5,7 +5,7 @@ description: Apply the AI Engineering OS governance gates at task start, before 
 
 # Governance entry
 
-Run the three stateless gates through the `ai-engineering-os` MCP server (or the equivalent `codex-os` CLI commands). The gates answer "allowed / not allowed and why"; they never tell you how to do professional work.
+Run the three stateless gates through the `ai-engineering-os` DSH tools (or the equivalent `aios` CLI commands). The gates answer "allowed / not allowed and why"; they never tell you how to do professional work.
 
 ## Task start (Code Start Gate)
 

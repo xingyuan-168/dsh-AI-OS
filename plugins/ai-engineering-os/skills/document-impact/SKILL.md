@@ -16,5 +16,5 @@ Documentation is a fact source, not an essay collection. Update exactly the docu
 - Map the change to documents before coding: an API change touches API_SPEC and CHANGELOG; a schema change touches DATABASE and CHANGELOG; a governance decision needs an ADR.
 - One-line backend fix must not force a rewrite of ten documents.
 - `docs/memory/memory.jsonl` contains Git-tracked durable facts; its SQLite index is runtime data. Follow the memory-protocol skill.
-- Update affected documents in the same task; native Codex review confirms consistency. There is no `docs_synced` parameter.
+- Update affected documents in the same task; native DSH review confirms consistency. There is no `docs_synced` parameter.
 - `PROJECT_CONTEXT.md` is a derived cache — regenerate with `context_refresh`, never hand-edit it.
