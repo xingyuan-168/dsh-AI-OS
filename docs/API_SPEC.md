@@ -19,7 +19,7 @@ DSH 工具、MCP 与 CLI 共享实现和业务响应封装（`{ok, data} / {ok:f
 
 ## DSH 宿主契约
 
-- **事件监听**：`tools/pre-execute`（工具调用前裁决）、`fs/write-intent`、`fs/edit-intent`（写入时刻裁决）、`agent/created`（会话建立）。
+- **事件监听**：`tools/pre-execute`（唯一的派发前拒绝点，覆盖全部工具）、`agent/created`（会话建立）。`fs/write-intent` / `fs/edit-intent` 是单槽写意图决策，不能拒绝操作，插件不注册；内核仍接受这两类载荷以便诊断。
 - **人工命令**：`/aios-check`、`/aios-finish`、`/aios-status`、`/aios-memory`，经 `ctx.commands.register` 注册。
 - **Skill Provider**：`ctx.skills.registerProvider` 读取 `plugins/ai-engineering-os/skills/*/SKILL.md`。
 - **提示注入**：`ctx.systemPrompt.section` 输出宪法摘要与当前 Gate 状态。

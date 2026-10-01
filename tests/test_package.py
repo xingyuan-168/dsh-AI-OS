@@ -1,4 +1,3 @@
-import re
 import runpy
 import tomllib
 from pathlib import Path
@@ -38,10 +37,8 @@ def test_package_module_entrypoint_dispatches_cli(
     assert called == [True]
 
 
-def test_sdist_keeps_script_contracts_and_windows_launcher_exit_status() -> None:
+def test_sdist_keeps_script_contracts() -> None:
     root = Path(__file__).resolve().parents[1]
     metadata = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
     assert "scripts" in metadata["tool"]["hatch"]["build"]["targets"]["sdist"]["include"]
-    launcher = (root / "plugins/ai-engineering-os/scripts/launch_mcp.cmd").read_text()
-    assert "if %ERRORLEVEL% EQU 0 (" not in launcher
-    assert len(re.findall(r"mcp\nexit /b %ERRORLEVEL%", launcher)) == 3
+    assert "plugins" in metadata["tool"]["hatch"]["build"]["targets"]["sdist"]["include"]

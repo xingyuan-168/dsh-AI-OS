@@ -13,7 +13,7 @@ Accepted（取代此前以 Codex 宿主为前提的集成假设；不改变 ADR-
 DSH 提供的原生强制点是 Cordis 事件与服务：
 
 - waterfall `tools/pre-execute`：允许 / 拒绝 / 取消 / 询问，覆盖**全部**工具（Codex 侧只能靠 matcher 枚举 4 类）。
-- waterfall `fs/write-intent` 与 `fs/edit-intent`：**写入时刻**裁决目标路径，Codex 侧完全没有等价物。
+- waterfall `fs/write-intent` 与 `fs/edit-intent`：单槽**写意图**决策，决定写入的期望版本，**不能拒绝任何操作**。Codex 侧没有等价物，但它也不能当强制点使用——能观测不等于能拒绝。
 - serial `agent/created` 与 waterfall `system-prompt/assemble`：会话建立时注入宪法与当前 Gate 状态。
 - 服务：`tools.register/guard`、`skills.registerProvider`、`systemPrompt.section/context`、`commands.register`。
 
@@ -28,7 +28,7 @@ DSH 提供的原生强制点是 Cordis 事件与服务：
 
 ## 决定
 
-1. **采用 C**：新增 DSH Cordis 插件（`plugins/ai-engineering-os/`），监听 `tools/pre-execute`、`fs/write-intent`、`fs/edit-intent`、`agent/created`，并注册 8 个原生工具、4 个人工命令与 1 个 Skill Provider。插件通过 `aios` CLI 以 stdin JSON 调用内核，内核缺失/超时/异常/无效响应时按 fail-closed 处理：变更类操作拒绝并给出规则编号，只读操作仅提示检查不可用。
+1. **采用 C**：新增 DSH Cordis 插件（`plugins/ai-engineering-os/`），监听 `tools/pre-execute`（唯一可拒绝的派发前裁决点，覆盖全部工具）与 `agent/created`（会话建立），并注册 8 个原生工具、人工命令与 1 个 Skill Provider。`fs/write-intent` / `fs/edit-intent` 不能拒绝操作，故不注册；内核仍接受这两类载荷以便诊断。插件通过 `aios` CLI 以 stdin JSON 调用内核，内核缺失/超时/异常/无效响应时按 fail-closed 处理：变更类操作拒绝并给出规则编号，只读操作仅提示检查不可用。
 2. **不新增第二套离线规则**：DSH 载荷经 `application/dsh_gateway.py` 规范化为内核既有请求类型，`authorization.py` / `governance_policy.py` / `cleanup_policy.py` / `core/gates.py` 保持不变。
 3. **三层强制模型**：
    - Tier 0 基线：任何工作区恒定开启，项目配置不可关闭（用户资产保护、受保护路径、Memory 单写者）。
@@ -42,7 +42,7 @@ DSH 提供的原生强制点是 Cordis 事件与服务：
 - **正面**：治理在真实宿主上重新具备强制力，且覆盖全部工具与写入时刻；Codex 专用清单与命名清零；所有项目默认受基线约束。
 - **负面**：插件依赖宿主插件契约（当前 0.2.0-rc.2），宿主升级可能变更事件签名，需要回归；`aios` CLI 必须在 PATH 上，否则插件进入 fail-closed（安全但会阻塞写入）；未初始化项目在严格模式下会被要求先满足 Code Start，需用 `aios init` 记录项目事实。
 - **不可逆性**：重命名为破坏性变更（导入路径与控制台命令），旧调用方需同步迁移。
-- **复核条件**：宿主插件契约发生 BREAKING 变更、或 `tools/pre-execute` / `fs/write-intent` 语义变化时，重新评估本 ADR。
+- **复核条件**：宿主插件契约发生 BREAKING 变更、或 `tools/pre-execute` / `agent/created` / `system-prompt/assemble` 语义变化时，重新评估本 ADR。
 
 ## 关联
 

@@ -33,11 +33,11 @@
 
 | DSH 事件 | 触发时机 | 处理 |
 | --- | --- | --- |
-| `tools/pre-execute` | 任意工具调用前 | 返回 deny 或放行；覆盖全部工具，不按工具名枚举 |
-| `fs/write-intent` | `FileSystem.writeText` 前 | 受保护/治理路径裁决 |
-| `fs/edit-intent` | `FileSystem.editText` 前 | 同写意图，含 Move/Rename 源与目标 |
+| `tools/pre-execute` | 任意工具调用前 | 返回 deny 或放行；**唯一可拒绝的派发前裁决点**，覆盖全部工具，不按工具名枚举 |
 | `agent/created` + `systemPrompt.section` | 会话建立 | 注入宪法与当前 Gate 状态 |
 | `tools/execute` / `tools/post-execute` | 执行期与结果期 | 观测，不改变裁决 |
+
+`fs/write-intent` 与 `fs/edit-intent` 是**单槽写意图决策**（决定写入的期望版本），不能拒绝任何操作，因此插件不注册它们——在那里挂监听会看起来像写入时刻保护，实际提供不了。插件接受这两类载荷仅用于诊断与未来宿主版本。
 
 - 无条件拦截：force push、删远端 ref、update-ref -d、compose down -v、volume rm/prune、对根/家目录递归强删。
 - 局部 Git 操作：`reset --hard`、`checkout --`、`clean -f`、`branch -D` 仅在登记且与 Git 实际清单一致的 disposable checkout 中具备局部放行条件；`branch -d` 不再被当作 `-D`。切换 cwd 或指定 Git -C 不会继承原位置权限；无法可靠解析的上下文拒绝并说明原因。

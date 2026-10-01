@@ -16,10 +16,10 @@ updated_at: 2026-10-01
 
 - URL: 本机 DSH 安装（profile bundle 层 `@deepseek-ai/dsh-base` / `@deepseek-ai/dsh-web-app`）
 - License: 随宿主分发
-- 解决什么：提供宿主原生强制点——waterfall `tools/pre-execute`（放行/拒绝/取消/询问）、`fs/write-intent`、`fs/edit-intent`（写入时刻裁决）、serial `agent/created`、`system-prompt/assemble`；服务 `tools.register/guard`、`skills.registerProvider`、`systemPrompt.section`、`commands.register`。
+- 解决什么：提供宿主原生裁决点——waterfall `tools/pre-execute`（**唯一可放行/拒绝/取消/询问的派发前点**）、单槽 `fs/write-intent` / `fs/edit-intent`（只决定写意图版本，不能拒绝）、serial `agent/created`、`system-prompt/assemble`；服务 `tools.register/guard`、`skills.registerProvider`、`systemPrompt.section`、`commands.register`。
 - 可直接复用：是——宿主扩展点本身即集成面，无需自研注入机制。
 - 可二开：是——插件以 npm 包形式装进 profile 的补丁层。
-- 值得学习：把"裁决"与"执行"分离的 waterfall 语义；写入时刻（write-intent）在 Codex 侧并不存在。
+- 值得学习：把"裁决"与"执行"分离的 waterfall 语义；同时提供可观测（写意图）与可拒绝（派发前）两类点，说明必须区分二者，不能把"能观测"当成"能拒绝"。
 - 风险：插件契约属于宿主版本面（当前 0.2.0-rc.2），升级可能变更签名；必须以 fail-closed 兜底。
 
 ### @deepseek-ai/dsh-experimental-auto-review

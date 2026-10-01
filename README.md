@@ -18,8 +18,7 @@ AI Engineering OS 是 DeepSeek Harness 的**工程治理层**：无状态三 Gat
 
 | 强制点 | DSH 机制 | 作用 |
 | --- | --- | --- |
-| 工具调用前 | `tools/pre-execute` | 覆盖全部工具，对破坏性/越界操作返回 deny |
-| 文件写入前 | `fs/write-intent`、`fs/edit-intent` | 写入时刻裁决受保护路径 |
+| 工具调用前 | `tools/pre-execute` | 唯一可拒绝的派发前裁决点；覆盖全部工具（含写入与 Shell），破坏性/越界操作返回 deny |
 | 会话建立 | `agent/created` + `systemPrompt.section` | 注入宪法与当前 Gate 状态 |
 | 工具面 | `ctx.tools.register` | 8 个治理工具 |
 | 命令面 | `ctx.commands.register` | `/aios-check`、`/aios-finish`、`/aios-status`、`/aios-memory` |

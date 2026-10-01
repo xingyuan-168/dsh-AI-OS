@@ -5,7 +5,7 @@
 ## 十条宪法
 
 1. **不改变 DSH 原生工程方式**：AIOS 只治理"能否做、何时做、做完留什么"；理解仓库、编码、调试、构建、测试、子 Agent（subagent / workflow）调度、Plan Mode 都是 DSH 的原生能力，AIOS 不重新实现。
-2. **正式编码前必须通过 Code Start Gate**：GitHub remote 存在可达；开源调研分层完成并记录 Decision；仓库无复制式脏乱、无未解决冲突。无 GitHub 时允许读 input/、分析、调研、规划、写文档，禁止正式 src/ 实现。客观边界由 DSH 插件（`tools/pre-execute`、`fs/write-intent`）自动强制，`aios check` 可主动预看阻塞原因。
+2. **正式编码前必须通过 Code Start Gate**：GitHub remote 存在可达；开源调研分层完成并记录 Decision；仓库无复制式脏乱、无未解决冲突。无 GitHub 时允许读 input/、分析、调研、规划、写文档，禁止正式 src/ 实现。客观边界由 DSH 插件（`tools/pre-execute` 这一唯一派发前裁决点）自动强制，`aios check` 可主动预看阻塞原因。
 3. **input/ 只读**：不得修改、重命名、删除 input/ 内容；output/ 只放最终交付物，不放缓存、日志、源码副本。
 4. **禁止复制式版本管理**：不创建 src_v2/、backup/、copy/、final/、old/ 等副本目录或 *_final.py、*_v1.* 等副本文件；Git 历史是唯一归档，被否决的设计放 archive 分支。
 5. **受影响文档必须同步**：只改受本次变更影响的文档；一行后端修复不得强制重写十个文档；事实只保存在 Git 管理的文档中，任何派生缓存永不作为事实源。

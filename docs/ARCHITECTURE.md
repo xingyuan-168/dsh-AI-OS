@@ -17,7 +17,7 @@ Windows 本地、可审计的 DeepSeek Harness 工程治理层。Python 3.12，�
 
 插件把宿主事件规范化为内核请求，再经 `aios authorize-dsh`（stdin JSON）交给同一个确定性内核；否定判定由插件转换为宿主可执行的拒绝。
 
-- 监听：`tools/pre-execute`（工具调用前）、`fs/write-intent` / `fs/edit-intent`（写入时刻）、`agent/created`（会话建立）。
+- 监听：`tools/pre-execute`（唯一的派发前拒绝点，覆盖全部工具）、`agent/created`（会话建立）。`fs/write-intent` / `fs/edit-intent` 不能拒绝操作，故意不注册。
 - 注册：`ctx.tools.register` 8 个治理工具、`ctx.commands.register` 人工命令、`ctx.skills.registerProvider` Skill 目录、`ctx.systemPrompt.section` 宪法注入。
 - 失败封闭：内核缺失/超时/异常/无效 JSON 时，变更类操作拒绝并给出规则编号，只读操作只提示检查不可用；不复制第二套离线规则。
 - 插件不执行命令、不代表宿主授权；DSH 可独立拒绝或禁用插件。

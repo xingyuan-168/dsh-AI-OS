@@ -1,0 +1,32 @@
+{
+  "name": "ai-engineering-os",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DeepSeek Harness engineering governance layer: three stateless gates, worktrees, and memory.",
+  "license": "MIT",
+  "author": {
+    "name": "xingyuan-168",
+    "url": "https://github.com/xingyuan-168"
+  },
+  "homepage": "https://github.com/xingyuan-168/dsh-AI-OS",
+  "repository": "https://github.com/xingyuan-168/dsh-AI-OS",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "skills"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "governance",
+    "cordis",
+    "gates"
+  ]
+}

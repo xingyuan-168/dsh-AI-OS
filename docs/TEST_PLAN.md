@@ -16,7 +16,8 @@
 - 开源调研分层：豁免类误拦 = 失败；必查类漏拦 = 失败；调研文档缺 requirement_id/summary/scope/updated_at/Decision 元数据 = 失败；stale requirement_id = 失败；空模板 = 失败。
 - 前端 Gate 分层：豁免路径直接放行；Gated 路径缺原型/UI_SPEC 均阻塞；批准来自 UI_SPEC 的 approval 块（scope 精确匹配），调用方布尔无法绕过。
 - input/ 只读：治理通道写 input/ 被拒；副本扫描跳过 input/；output/ 可写但纯净由卫生检查判定。
-- DSH 事件桥：`tools/pre-execute` 载荷放行/拒绝；`fs/write-intent` 与 `fs/edit-intent` 的目标、源、Move to 均受保护；内核缺失/超时/异常/无效 JSON 时变更类操作拒绝、只读操作只提示检查不可用；不输出宿主不支持的裁决语义。
+- DSH 事件桥：`tools/pre-execute` 载荷放行/拒绝；`fs/write-intent`/`fs/edit-intent` 载荷规范化（内核接受、插件不注册，因为该槽位不能拒绝）；内核缺失/超时/异常/无效 JSON 时变更类操作拒绝、只读操作只提示检查不可用；不输出宿主不支持的裁决语义。
+- 插件桥（Node）：载荷规范化、内核子进程裁决、内核缺失时对变更类失败封闭而对只读仅提示、会话上下文来自内核。
 - 危险命令：main 指向安全临时叶目标可通过客观检查；temp 指向外部资产拒绝；宽泛根、跟踪文件、保护子项、链接、变量/复合表达式拒绝；branch -d 与 -D 区分；Git -C 不继承错误上下文。删除载荷只做诊断，真实删除仅发生于专门创建的 Worktree 夹具。
 - Finish 薄检查：声明的 --test-command 失败 = 阻塞；未声明不阻塞；TESTS_NOT_PASSED/DOCS_NOT_SYNCED 不再存在；MEMORY_CANDIDATES_PENDING 非阻塞。
 - Memory：record 校验（Secret 拒绝、去重、类型/状态枚举）、reindex、单写者（worktree 内 docs/memory/ 写入被拒、candidate 放行）、candidate accept 并入/reject 丢弃/未知 id 报 MEMORY_CANDIDATE_MISSING、损坏 JSONL 阻塞写入。
