@@ -33,7 +33,7 @@ DSH 提供的原生强制点是 Cordis 事件与服务：
 3. **三层强制模型**：
    - Tier 0 基线：任何工作区恒定开启，项目配置不可关闭（用户资产保护、受保护路径、Memory 单写者）。
    - Tier 1 已治理项目：存在 `.aios/project.yaml` 时在写入时刻强制三 Gate。
-   - Tier 2 全局严格模式：`~/.dsh/aios.yaml` 的 `strict: true`（默认）使未初始化项目同样套用 Tier 1；插件在内存中物化确定性默认配置，**不静默写盘**。
+   - Tier 2 全局严格模式：profile 补丁条目的 `config.strict: true`（默认）使未初始化项目同样套用 Tier 1；内核只在内存中物化确定性默认配置，**不静默写盘**。`strict: false` 时未初始化项目只受 Tier 0 约束。
 4. **全量重命名**：`codex_ai_os`→`aios`、`codex-os`→`aios`、`.codex-os/`→`.aios/`、`codex/wt-`→`aios/wt-`、文档标记 `codex-os-document`→`aios-document`。
 5. **提供自动迁移**：检测 `.codex-os/project.yaml` 后，走 ADR-0017 既有机制——SQLite 一致性备份 + SHA-256 sidecar，移动（非复制）配置与运行库到 `.aios/`，升级 `schema_version` 到 1.3；未知结构、忙库、活动 Worktree 一律拒绝且不重建。既有 `codex/wt-*` 登记行继续被判为合法，仅新建使用新前缀。
 

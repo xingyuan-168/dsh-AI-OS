@@ -60,11 +60,16 @@ export async function apply(ctx, config = {}) {
 
   ctx.on('tools/pre-execute', async (exec, next) => {
     const decision = await adjudicate(
-      toolPayload({
-        tool: extractName(exec) ?? exec?.name,
-        args: exec?.arguments ?? exec?.args ?? exec?.input ?? exec?.tool_input,
-        cwd: resolveCwd(exec?.cwd, exec?.workdir),
-      }),
+      {
+        ...toolPayload({
+          tool: extractName(exec) ?? exec?.name,
+          args: exec?.arguments ?? exec?.args ?? exec?.input ?? exec?.tool_input,
+          cwd: resolveCwd(exec?.cwd, exec?.workdir),
+        }),
+        // Tier 2: strict mode makes an uninitialized project follow the same
+        // gates. The kernel materializes the default policy in memory only.
+        strict: Boolean(settings.strict),
+      },
       settings,
     )
     if (decision.decision === 'deny') return preToolVerdict(decision)

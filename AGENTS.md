@@ -19,7 +19,7 @@
 
 - **Tier 0 基线**（恒定开启，任何工作区，项目配置不可关闭）：用户资产保护（force push / 删远端 ref / update-ref -d / volume rm-prune / 对根或家目录递归强删）、受保护路径（`input/**`、`.git/**`、`**.env`、`**/credentials/**`）、Memory 单写者。
 - **Tier 1 已治理项目**（存在 `.aios/project.yaml`）：三 Gate 在写入时刻强制。
-- **Tier 2 全局严格模式**（`~/.dsh/aios.yaml` 的 `strict: true`，默认开启）：未初始化项目同样套用 Tier 1，插件在内存中物化确定性默认配置，不静默写盘。
+- **Tier 2 全局严格模式**（profile 补丁条目 `config.strict: true`，默认开启）：未初始化项目同样套用 Tier 1，内核只在内存中物化确定性默认配置，不静默写盘、不改项目。
 
 ## Git 节奏
 

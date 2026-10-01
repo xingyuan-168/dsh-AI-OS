@@ -24,7 +24,7 @@ DSH 工具、MCP 与 CLI 共享实现和业务响应封装（`{ok, data} / {ok:f
 - **Skill Provider**：`ctx.skills.registerProvider` 读取 `plugins/ai-engineering-os/skills/*/SKILL.md`。
 - **提示注入**：`ctx.systemPrompt.section` 输出宪法摘要与当前 Gate 状态。
 - **插件配置**：`strict`（默认 true）、`uninitializedProjects`（默认 `strict`）、`kernelCommand`（默认 `aios`）、`timeoutMs`（默认 10000）、`failMode`（默认 `closed`）。
-- **全局策略**：`~/.dsh/aios.yaml` 提供 `strict`、`uninitialized_projects`、`governed_roots`。
+- **全局策略**：就是 profile 补丁条目里的 `config`（`strict`、`kernelCommand`、`timeoutMs`、`failMode`）；插件不读第二份策略文件，`strict` 由插件随每次载荷以 `strict` 字段传给内核，内核不落盘。
 
 ## CLI 命令
 

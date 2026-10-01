@@ -35,6 +35,12 @@ _CONTEXT = (
 # Public alias: the DSH plugin injects this text at session start.
 SESSION_CONTEXT = _CONTEXT
 
+# Deterministic defaults used when Tier 2 strict mode judges a project that has
+# no .aios/project.yaml. They live in memory only: the plugin never materializes
+# a configuration file the user did not ask for.
+DEFAULT_CODE_PATHS: tuple[str, ...] = ("src",)
+DEFAULT_GITHUB_HOSTS: frozenset[str] = frozenset({"github.com"})
+
 
 class HookGatewayError(RuntimeError):
     def __init__(self, code: str, message: str) -> None:
@@ -72,6 +78,8 @@ def _evaluate(payload: dict[str, Any]) -> dict[str, Any]:
     cwd = Path(str(data.get("workdir") or payload.get("cwd") or ".")).resolve()
     resolved = resolve_runtime_root(cwd)
     initialized = (resolved.project_root / ".aios/project.yaml").is_file()
+    # Tier 2 strict mode is opt-in per call and never persisted to the project.
+    strict = bool(payload.get("aios_strict")) and not initialized
     if payload.get("hook_event_name") == "SessionStart":
         return _result("context" if initialized else "allow", "SESSION_CONTEXT", _CONTEXT)
     if tool not in {"Bash", "apply_patch", "Write", "Edit"}:
@@ -98,7 +106,7 @@ def _evaluate(payload: dict[str, Any]) -> dict[str, Any]:
     paths = _write_targets(tool, command, data)
     boundaries: dict[Path, GateDecision] = {}
     network_deadline = time.monotonic() + 5
-    if tool in {"apply_patch", "Write", "Edit"} and not paths and initialized:
+    if tool in {"apply_patch", "Write", "Edit"} and not paths and (initialized or strict):
         return _result(
             "deny", "PATCH_TARGET_UNRESOLVED", "patch contains no supported file headers"
         )
@@ -114,8 +122,22 @@ def _evaluate(payload: dict[str, Any]) -> dict[str, Any]:
             )
         target = lexical.resolve()
         owner = resolve_runtime_root(target.parent)
-        if not (owner.project_root / ".aios/project.yaml").is_file():
-            continue
+        governed = (owner.project_root / ".aios/project.yaml").is_file()
+        if governed:
+            config = load_project_config(owner.project_root)
+            code_paths: tuple[str, ...] | list[str] = config.code_paths
+            github_hosts: frozenset[str] | tuple[str, ...] = config.github_hosts
+        elif strict:
+            # Tier 2: an uninitialized project is judged against a deterministic
+            # default held only in memory. Nothing is written to disk, so the
+            # decision stays reproducible and the project stays unmodified.
+            code_paths = DEFAULT_CODE_PATHS
+            github_hosts = DEFAULT_GITHUB_HOSTS
+        else:
+            # Tier 0: baseline protection applies in every workspace, governed or
+            # not, but the project-scoped gates below need .aios/project.yaml.
+            code_paths = ()
+            github_hosts = DEFAULT_GITHUB_HOSTS
         if resolved.worktree and not target.is_relative_to(resolved.checkout_root):
             return _result(
                 "deny",
@@ -139,8 +161,7 @@ def _evaluate(payload: dict[str, Any]) -> dict[str, Any]:
         )
         if not outcome.allowed:
             return _result("deny", outcome.rule_id, outcome.reason, (target.as_posix(),))
-        config = load_project_config(owner.project_root)
-        if _formal_write_targets((relative,), config.code_paths):
+        if _formal_write_targets((relative,), code_paths):
             if owner.checkout_root not in boundaries:
                 remaining = network_deadline - time.monotonic()
                 if remaining <= 0:
@@ -148,7 +169,7 @@ def _evaluate(payload: dict[str, Any]) -> dict[str, Any]:
                         "NETWORK_BUDGET_EXHAUSTED", "remote check budget exhausted"
                     )
                 boundaries[owner.checkout_root] = _formal_boundary(
-                    owner.checkout_root, config.github_hosts, timeout=remaining
+                    owner.checkout_root, github_hosts, timeout=remaining
                 )
             boundary = boundaries[owner.checkout_root]
             if not boundary.allowed:

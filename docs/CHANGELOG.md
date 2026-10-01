@@ -8,6 +8,17 @@
 
 ## Unreleased
 
+### DSH 宿主迁移与全局强制（2026-10-01，ADR-0018，breaking change）
+
+- 破坏性重命名：命令 `codex-os` → `aios`，导入 `codex_ai_os.*` → `aios.*`，发行名 → `aios-governance`，运行库 `.codex-os/` → `.aios/`，worktree 分支前缀 → `aios/wt-`（既有 `codex/wt-*` 登记继续有效）。
+- 宿主集成整体替换：删除 `.codex/config.toml`、`.codex/hooks.json`、`.codex-plugin/plugin.json`、`.mcp.json`、`hooks/`、8 个 `skills/*/agents/openai.yaml`、`.agents/plugins/marketplace.json`、`scripts/launch_mcp.cmd`；新增 DSH Cordis 插件（`package.json` + `src/*.js`），插件只转发、裁决全部来自内核。
+- 强制点修正：`tools/pre-execute` 是唯一可拒绝的派发前裁决点，覆盖全部工具；`fs/write-intent` / `fs/edit-intent` 是单槽写意图决策，不能拒绝任何操作，因此不注册。
+- 三层强制模型：Tier 0 基线在任何工作区生效（含未初始化项目：受保护路径、用户资产保护、Memory 单写者）；Tier 1 三 Gate 需要 `.aios/project.yaml`；Tier 2 `strict` 让未初始化项目套用 Tier 1，且只在内存中物化确定性默认策略，不写盘、不改项目。
+- 新增 `aios authorize-dsh`、`aios migrate`、`aios approval record`、`aios context refresh`；`authorize-hook` 保留为 Codex 兼容桥，与 `authorize-dsh` 共用同一内核，避免两套判定漂移。
+- 迁移：`.codex-os/` → `.aios/` 先做 SHA-256 一致性备份再移动；未识别结构拒绝，未识别条目保留并报告；本仓库自身运行库已迁移。
+- 文档、Skill 与 ADR 全部改为 DSH 措辞；ADR-0018 记录迁移决策与被否决方案；调研记录 REQ-DSH-2.0。
+- 修复：pytest 临时根落在受治理仓库内时，根解析会越过夹具读到真实项目事实（曾把夹具记录写进受跟踪的 `docs/memory/memory.jsonl`）——basetemp 现在固定在 `.aios/pytest`，并对 Git 发现设置 ceiling、对需要隔离的用例给出显式项目边界；`python -m aios` 之前绕过 UTF-8 stdio 设置，会把 JSON 桥输出写成非 UTF-8 字节。
+
 ### 安全边界与数据保全修复（2026-09-24，ADR-0017）
 
 - 清理按真实目标检查；统一项目/Worktree 解析和 Move to 保护，修正 branch -d/-D。薄 Hook 统一内核，错误明确拒绝；移除 ask 与脏文件归属推断，增加只读 --explain 和 15/10/5 秒超时预算。

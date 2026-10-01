@@ -85,6 +85,41 @@ def test_uninitialized_project_is_not_governed(tmp_path: Path) -> None:
     assert outcome["decision"] == "allow"
 
 
+def test_tier0_protected_paths_hold_before_initialization(tmp_path: Path) -> None:
+    """Tier 0 is the baseline every workspace gets, governed or not."""
+
+    (tmp_path / ".git").mkdir()
+    for protected in ("input/asset.txt", ".git/hooks/pre-commit", "deploy/.env"):
+        outcome = authorize_dsh_payload(_intent(tmp_path, "fs/write-intent", protected))
+        assert outcome["decision"] == "deny", protected
+
+
+def test_tier0_destructive_git_holds_before_initialization(tmp_path: Path) -> None:
+    (tmp_path / ".git").mkdir()
+    outcome = authorize_dsh_payload(
+        _pre_execute(tmp_path, "pwsh", command="git push --force origin main")
+    )
+    assert outcome["decision"] == "deny"
+
+
+def test_tier2_strict_mode_governs_an_uninitialized_project(tmp_path: Path) -> None:
+    """Strict mode applies Tier 1 gates without writing anything to the project."""
+
+    (tmp_path / ".git").mkdir()
+    payload = {**_intent(tmp_path, "fs/write-intent", "src/module.py"), "strict": True}
+    outcome = authorize_dsh_payload(payload)
+    assert outcome["decision"] == "deny"
+    assert outcome["rule_id"] == "CODE_START_BLOCKED"
+    # The project stays untouched: the default policy exists only in memory.
+    assert not (tmp_path / ".aios").exists()
+
+
+def test_tier2_strict_mode_still_allows_documentation(tmp_path: Path) -> None:
+    (tmp_path / ".git").mkdir()
+    payload = {**_intent(tmp_path, "fs/write-intent", "docs/note.md"), "strict": True}
+    assert authorize_dsh_payload(payload)["decision"] == "allow"
+
+
 def test_payload_without_input_is_tolerated(governed_repo: Path) -> None:
     outcome = authorize_dsh_payload(
         {"event": "fs/write-intent", "cwd": str(governed_repo), "input": None}

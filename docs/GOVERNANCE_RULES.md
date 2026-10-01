@@ -50,9 +50,19 @@
 
 ## 安装与强制
 
-- 插件以 npm 包形式安装进 DSH profile，并在 profile 的补丁层登记一个条目；`~/.dsh/aios.yaml` 提供全局策略（`strict`、`governed_roots`）。
-- 三层强制模型见 AGENTS.md「强制分层」。Tier 0 基线在**任何工作区**恒定开启，项目配置不可关闭；Tier 1 需要 `.aios/project.yaml`；Tier 2（默认开启）使未初始化项目同样套用 Tier 1，且只在内存中物化默认配置，不静默写盘。
-- 插件注册对**新会话**生效；`plugin_manager list_plugins` 只能证明插件已被 profile 启用，不能证明某个正在运行的会话已加载。源码验证不等于插件已安装。
+安装分两步，第二步无法由源码或本机文件证明：
+
+1. **装依赖**：`plugin_manager install_bundle` 以本地路径 spec 安装本包（例如 `file:<repo>/plugins/ai-engineering-os`）。pnpm 会把包链接进 `~/.dsh/profiles/<profile>/node_modules/`。该调用会返回 `not-bundle`：本包是**插件**而不是 bundle，它不向 profile 根插入行，因此这一步只负责让模块可解析。
+2. **接进补丁层**：在 `~/.dsh/profiles/<profile>/cordis.patch.yml` 追加一个条目，`id` 与 `name` 用 `ai-engineering-os`，`config` 即全局策略（`strict`、`kernelCommand`、`timeoutMs`、`failMode`）。这是 profile 唯一的策略来源，插件不读第二份策略文件。
+
+**激活需要重启 DSH**：补丁层在启动时合成进 Loader 树，运行中的宿主不会因为文件被改动就重新合成。因此：
+
+- `aios doctor` 的 `dsh-profile` 只能证明"某个 profile 声明了本插件"，`plugin-manifest` 只能证明"本包在磁盘上"；两者都不等于已加载，所以两者都返回 `ok: null` 的未知态而不是通过。
+- `plugin_manager list_plugins` 只能证明宿主当前的 Loader 树里有这个条目；重启前后对比条目数是最直接的证据。
+- 真正的强制生效只由**新会话的实际行为**证明：在已治理项目里写 `input/` 应被拒并给出规则编号；未初始化项目在 `strict` 下写 `src/` 应被 `CODE_START_BLOCKED` 拒绝。
+- 源码验证不等于插件已安装，安装也不等于已加载，加载也不等于宿主未禁用。三者分开陈述。
+
+三层强制模型见 AGENTS.md「强制分层」。Tier 0 基线在**任何工作区**恒定开启，项目配置不可关闭；Tier 1 需要 `.aios/project.yaml`；Tier 2（默认开启）使未初始化项目同样套用 Tier 1，且只在内存中物化默认配置，不静默写盘。
 
 ## 规则优先级
 

@@ -76,6 +76,9 @@ def normalize_dsh_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
         "tool_name": tool,
         "tool_input": tool_input,
         "hook_event_name": "PreToolUse",
+        # Tier 2: when the plugin runs in strict mode, a project without
+        # .aios/project.yaml is judged against the in-memory default policy.
+        "aios_strict": bool(payload.get("strict")),
     }
 
 
