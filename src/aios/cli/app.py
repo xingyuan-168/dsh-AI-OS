@@ -1,9 +1,9 @@
 """Typer command surface for AI Engineering OS (governance-core, ADR-0016).
 
-Seven governance commands plus the hook bridge: init, check, finish,
-memory, worktree, mcp, doctor, and authorize-hook. The CLI answers
-"allowed / not allowed and why" and manages the light runtime state; it
-never tells DSH how to do professional work.
+Governance commands plus the two host bridges: init, check, finish, migrate,
+approval, context, memory, worktree, mcp, doctor, authorize-hook, and
+authorize-dsh. The CLI answers "allowed / not allowed and why" and manages the
+light runtime state; it never tells DSH how to do professional work.
 """
 
 from __future__ import annotations
@@ -15,8 +15,12 @@ from typing import Annotated, Any
 
 import typer
 
+from aios.application.approvals import ApprovalError, record_approval
 from aios.application.doctor import DoctorService
+from aios.application.dsh_gateway import authorize_dsh_payload
 from aios.application.hook_gateway import authorize_hook_payload, explain_hook_payload
+from aios.application.migration import MigrationError as RuntimeMigrationError
+from aios.application.migration import migrate_runtime
 from aios.application.project import ProjectInitializer
 from aios.application.repository import RepositoryGovernanceService
 from aios.cli.output import emit, error_envelope, success_envelope
@@ -48,6 +52,14 @@ app.add_typer(memory_app, name="memory")
 
 worktree_app = typer.Typer(help="Disposable worktrees under .worktrees/.", no_args_is_help=True)
 app.add_typer(worktree_app, name="worktree")
+
+approval_app = typer.Typer(
+    help="Record user approvals and rejections for a gate.", no_args_is_help=True
+)
+app.add_typer(approval_app, name="approval")
+
+context_app = typer.Typer(help="Derived project context cache.", no_args_is_help=True)
+app.add_typer(context_app, name="context")
 
 
 def _fail(code: str, message: str, exit_code: int, json_output: bool) -> None:
@@ -275,7 +287,7 @@ def doctor_command(
     project_root: Annotated[Path, typer.Argument(help="Project directory.")] = Path("."),
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
-    """Report runtime diagnostics (Python, Git, SQLite, hooks)."""
+    """Report runtime diagnostics (Python, Git, SQLite, DSH plugin state)."""
 
     report = DoctorService(project_root).run()
     checks = [
@@ -657,6 +669,121 @@ def worktree_list_command(
         json_output=json_output,
         human=f"{len(records)} worktree(s) registered.",
     )
+
+
+@approval_app.command("record")
+def approval_record_command(
+    project_root: Annotated[Path, typer.Argument(help="Project root, subdirectory, or worktree.")],
+    gate: Annotated[str, typer.Option("--gate", help="code_start | frontend | finish")],
+    subject: Annotated[str, typer.Option("--subject", help="What the user approved.")],
+    decided_by: Annotated[str, typer.Option("--decided-by", help="Who decided.")],
+    decision: Annotated[str, typer.Option("--decision", help="approved | rejected")] = "approved",
+    scope: Annotated[str, typer.Option("--scope", help="Exact scope; scopes never inherit.")] = (
+        "default"
+    ),
+    reason: Annotated[str | None, typer.Option("--reason")] = None,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Record one user approval or rejection for a governance gate.
+
+    A frontend decision is additionally written into the Git-tracked
+    docs/design/UI_SPEC.md metadata; the SQLite row stays a derived index.
+    """
+
+    try:
+        data = record_approval(
+            project_root,
+            gate=gate,
+            subject=subject,
+            decision=decision,
+            decided_by=decided_by,
+            scope=scope,
+            reason=reason,
+        )
+    except (ApprovalError, ConfigError, MigrationError, ValueError, OSError) as exc:
+        _fail(getattr(exc, "code", "APPROVAL_FAILED"), str(exc), 2, json_output)
+        return
+    emit(
+        success_envelope(data),
+        json_output=json_output,
+        human=(
+            f"{data['decision']} recorded for gate {data['gate']} "
+            f"(scope {data['scope']})."
+        ),
+    )
+
+
+@context_app.command("refresh")
+def context_refresh_command(
+    project_root: Annotated[Path, typer.Argument(help="Project root, subdirectory, or worktree.")],
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Regenerate the derived PROJECT_CONTEXT.md cache from the docs/ tree."""
+
+    try:
+        root = resolve_runtime_root(project_root).project_root
+        path = DocumentManager(root).generate_context()
+    except (ConfigError, ValueError, OSError) as exc:
+        _fail("CONTEXT_FAILED", str(exc), 2, json_output)
+        return
+    emit(
+        success_envelope({"context": path.as_posix()}),
+        json_output=json_output,
+        human=f"context refreshed: {path.as_posix()}",
+    )
+
+
+@app.command("migrate")
+def migrate_command(
+    project_root: Annotated[Path, typer.Argument(help="Project root to migrate.")],
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Move a Codex-era .codex-os/ runtime onto the DSH layout (ADR-0018).
+
+    The live database is copied to a consistency backup with a SHA-256 sidecar
+    before anything moves. Unrecognized entries are preserved and reported, and
+    an unrecognized structure is refused rather than guessed at.
+    """
+
+    try:
+        result = migrate_runtime(project_root)
+    except (RuntimeMigrationError, OSError) as exc:
+        _fail(getattr(exc, "code", "MIGRATION_FAILED"), str(exc), 2, json_output)
+        return
+    emit(
+        success_envelope(
+            {
+                "migrated": result.migrated,
+                "moved": list(result.moved),
+                "backup": result.backup,
+                "unknown": list(result.unknown),
+                "detail": result.detail,
+            }
+        ),
+        json_output=json_output,
+        human=result.detail,
+    )
+
+
+@app.command("authorize-dsh")
+def authorize_dsh_command() -> None:
+    """Adjudicate one DSH host payload from stdin (ADR-0018).
+
+    Reads the plugin's JSON payload and prints the decision the plugin maps onto
+    the host's own pre-dispatch verdict. The command is always a read-only
+    diagnostic: it never executes the proposed operation, and its output is
+    never the host's execution authority. It exits 0 for allow and for deny;
+    a non-zero exit means the payload itself could not be read, which the plugin
+    must treat as fail-closed for mutating operations.
+    """
+
+    try:
+        payload: object = json.load(sys.stdin)
+    except (json.JSONDecodeError, OSError, ValueError):
+        raise typer.Exit(code=1) from None
+    if not isinstance(payload, dict):
+        raise typer.Exit(code=1)
+    typer.echo(json.dumps(authorize_dsh_payload(payload), ensure_ascii=False))
 
 
 def _worktree_payload(record: WorktreeRecord) -> dict[str, object]:

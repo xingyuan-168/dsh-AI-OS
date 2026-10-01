@@ -17,10 +17,10 @@ def test_runtime_version_matrix_is_single_release_truth() -> None:
     assert RUNTIME_VERSIONS.software == __version__
     assert RUNTIME_VERSIONS.plugin == "1.0.0"
     assert RUNTIME_VERSIONS.api == "2.0"
-    assert RUNTIME_VERSIONS.config_schema == "1.2"
-    assert RUNTIME_VERSIONS.document_schema == "1.2"
+    assert RUNTIME_VERSIONS.config_schema == "1.3"
+    assert RUNTIME_VERSIONS.document_schema == "1.3"
     assert RUNTIME_VERSIONS.sqlite_schema == "0001"
-    assert RUNTIME_VERSIONS.requirement_baseline == "REQ-GC-1.0"
+    assert RUNTIME_VERSIONS.requirement_baseline == "REQ-DSH-2.0"
     assert RUNTIME_VERSIONS.git_tag == "v1.0.0"
     assert RUNTIME_VERSIONS.as_dict()["software"] == "1.0.0"
 

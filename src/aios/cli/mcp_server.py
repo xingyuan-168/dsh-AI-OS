@@ -9,21 +9,19 @@ DSH's own engineering tools.
 
 from __future__ import annotations
 
-import sqlite3
 from collections.abc import Callable
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from mcp.server import MCPServer
 
+from aios.application.approvals import record_approval
 from aios.application.project import ProjectInitializer
 from aios.core.gates import (
     GateError,
     evaluate_code_start,
     evaluate_finish,
     evaluate_frontend,
-    write_frontend_approval,
 )
 from aios.core.worktree import WorktreeError, WorktreeManager, WorktreeRecord
 from aios.domain.config import ProjectType
@@ -175,79 +173,18 @@ def approval_record(
     """
 
     def operation() -> dict[str, Any]:
-        resolved = resolve_runtime_root(Path(project_root))
-        root = resolved.checkout_root
-        if gate not in {"code_start", "frontend", "finish"}:
-            raise ValueError("gate must be one of: code_start, frontend, finish")
-        if decision not in {"approved", "rejected"}:
-            raise ValueError("decision must be approved or rejected")
-        if not decided_by.strip():
-            raise ValueError("decided_by is required")
-        if not scope.strip():
-            raise ValueError("scope is required")
-        if gate == "frontend":
-            write_frontend_approval(
-                root / "docs" / "design" / "UI_SPEC.md",
-                scope=scope,
-                approved_by=decided_by,
-                approved_on=datetime.now(UTC).date().isoformat(),
-                decision=decision,
-            )
-        warnings = []
-        approval_id = None
-        try:
-            database = Database(resolved.project_root / ".aios/state/state.db")
-            database.migrate()
-            approval_id = _record_approval(
-                database,
-                gate=gate,
-                subject=subject,
-                decision=decision,
-                decided_by=decided_by,
-                reason=reason,
-            )
-        except (MigrationError, sqlite3.Error, OSError) as exc:
-            if gate != "frontend":
-                raise
-            warnings.append("Approval document saved; derived index unavailable: " + str(exc))
-        return _success(
-            id=approval_id,
+        data = record_approval(
+            Path(project_root),
             gate=gate,
             subject=subject,
             decision=decision,
+            decided_by=decided_by,
             scope=scope,
-            warnings=warnings,
+            reason=reason,
         )
+        return _success(**data)
 
     return _invoke(operation)
-
-
-def _record_approval(
-    database: Database,
-    *,
-    gate: str,
-    subject: str,
-    decision: str,
-    decided_by: str,
-    reason: str | None,
-) -> str:
-    approval_id = "APPROVAL-" + datetime.now(UTC).strftime("%Y%m%d%H%M%S%f")
-    with database.connection() as connection:
-        connection.execute(
-            "INSERT INTO approvals(id, subject, gate, decision, decided_by, reason, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                approval_id,
-                subject.strip(),
-                gate,
-                decision,
-                decided_by.strip(),
-                reason,
-                datetime.now(UTC).isoformat(),
-            ),
-        )
-        connection.commit()
-    return approval_id
 
 
 @mcp.tool()

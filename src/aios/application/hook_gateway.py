@@ -1,4 +1,9 @@
-"""Read-only Codex hook adapter; AIOS decisions never grant host execution authority."""
+"""Read-only host-event adapter; AIOS decisions never grant host execution authority.
+
+Shared by the Codex-compatible ``authorize-hook`` bridge and the DSH payload
+normalizer in :mod:`aios.application.dsh_gateway`, so both surfaces adjudicate
+through exactly one offline rule set (ADR-0018).
+"""
 
 from __future__ import annotations
 
@@ -26,6 +31,9 @@ _CONTEXT = (
     "run Code Start before implementation and Finish with that base ref. DSH must confirm "
     "task ownership before cleanup and protect the user's existing changes."
 )
+
+# Public alias: the DSH plugin injects this text at session start.
+SESSION_CONTEXT = _CONTEXT
 
 
 class HookGatewayError(RuntimeError):

@@ -29,16 +29,19 @@ class RuntimeVersions:
 
 
 RUNTIME_VERSIONS = RuntimeVersions(
-    requirement_baseline="REQ-GC-1.0",
+    requirement_baseline="REQ-DSH-2.0",
     software="1.0.0",
     plugin="1.0.0",
     api="2.0",
-    config_schema="1.2",
-    document_schema="1.2",
+    config_schema="1.3",
+    document_schema="1.3",
     sqlite_schema="0001",
     compatible_api_versions=("2.0",),
-    compatible_config_schemas=("1.2",),
-    compatible_document_schemas=("1.2",),
+    # Truthful compatibility: the configuration model and the ADR metadata
+    # markers still read every earlier schema, so an unmigrated project keeps
+    # working until `aios migrate` upgrades it.
+    compatible_config_schemas=("1.0", "1.1", "1.2", "1.3"),
+    compatible_document_schemas=("1.2", "1.3"),
 )
 
 

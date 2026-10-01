@@ -28,12 +28,13 @@ DSH 工具、MCP 与 CLI 共享实现和业务响应封装（`{ok, data} / {ok:f
 
 ## CLI 命令
 
-`aios init / check / finish / migrate / approval record / context refresh / memory search|record|reindex|candidates|candidate / worktree prepare|check|finish|cleanup|list / mcp / doctor / authorize-dsh`。
+`aios init / check / finish / migrate / approval record / context refresh / memory search|record|reindex|candidates|candidate / worktree prepare|check|finish|cleanup|list / mcp / doctor / authorize-dsh / authorize-hook`。
 
 - `check [--change-class --requirement-id]` = 仓库治理（GitHub 就绪 + 卫生 + output 纯净 + .gitignore 合规）+ docs 检查 + Code Start 预览（含调研分层），阻塞退出码 40。
 - `finish --base-ref <task-start-ref> [--change-class bugfix] [--test-command "..."] --memory-written|--memory-not-needed` = Finish Gate；缺少基线或其他阻塞退出码 40，空仓库基线为 EMPTY_TREE。
 - `migrate <project-root>` = 把 `.codex-os/` 迁移到 `.aios/`（一致性备份 + 移动，非复制）；未知结构拒绝，无 force 兜底。`init --migrate-runtime` 仍只迁移已知旧库。
-- `authorize-dsh` = stdin DSH 载荷 → `{decision, rule_id, targets, reason, next_step}`；`--explain` 只读诊断，不执行操作，也不代表宿主授权。
+- `authorize-dsh` = stdin DSH 载荷 → `{decision, rule_id, targets, reason, next_step}`；始终是只读诊断，不执行操作，也不代表宿主授权；载荷不可读时非零退出（插件对变更类操作按失败封闭处理）。
+- `authorize-hook` = 保留的 Codex 兼容桥：stdin Hook JSON → 官方 Hook JSON；与 `authorize-dsh` 共用同一内核与同一离线规则集，避免两套判定漂移。
 - `approval record` / `context refresh` = 补齐与 DSH 工具面同构的终端入口，复用同一用例。
 - `init <project-root> --migrate-runtime` 只迁移已知旧库；见 DATABASE.md。正常 init 不向已有 input/ 补写 .gitkeep。
 - Doctor 的 `ok: null` 表示未知（插件安装/加载不能由本地文件证明）；必需 SQLite 检查不再要求未使用的 FTS5。
