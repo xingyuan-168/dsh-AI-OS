@@ -31,7 +31,13 @@ import { extractName, resolveCwd, sessionPayload, toolPayload } from './payload.
 import { registerSurfaces } from './surfaces.js'
 
 export const name = 'ai-engineering-os'
-export const inject = ['tools']
+// Cordis' context throws when a plugin reads a service it did not declare, so
+// every surface the plugin touches is declared here. All four ship in
+// `@deepseek-ai/dsh-base`, which every base-backed profile composes; a profile
+// that omitted one would leave this fiber pending rather than half-registered,
+// which is the honest signal. `./surfaces.js` still reads each optional service
+// defensively, so a future edit cannot reintroduce the throwing read.
+export const inject = ['tools', 'commands', 'skills', 'systemPrompt']
 
 export const DEFAULTS = {
   strict: true,

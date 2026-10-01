@@ -98,7 +98,8 @@ plugins/ai-engineering-os/
 | 条目数没变化 | `dsh.bundle` 或包内 `cordis.patch.yml` 没被识别：核对键名与 `files` 是否包含该文件 |
 | `install_bundle` 返回 `not-bundle` | 同上；另外 profile 里可能残留上一轮的**旧副本**，删掉 `node_modules/ai-engineering-os` 再装 |
 | `set_plugin` 用包名报 `unknown-plugin` | 改用 `include:<rowId>` 形式寻址 |
-| 条目存在但 `fiberPhase: failed` | 插件 `apply` 抛错（宿主会隔离）：读 `~/.dsh/profiles/<profile>/.plugin-manager/logs/` 最近一次 operation 的报错堆栈；对照官方 `docs/reference/subsystems/{tools,commands,skills,system-prompt}.md` 的注册契约修正 `src/surfaces.js` |
+| `fiberPhase: failed`，报错含 `cannot get property "X" without inject` | 插件读了没在 `inject` 里声明的服务：Cordis 上下文是**抛错代理**，"先探测再使用"的写法本身就失败。把该服务加进 `inject`（基础 profile 由 `@deepseek-ai/dsh-base` 提供 `tools`/`commands`/`skills`/`systemPrompt`），或用 `ctx.get(name)` 防御式读取 |
+| `fiberPhase: failed`（其它报错） | 插件 `apply` 抛错（宿主会隔离）：读 `~/.dsh/profiles/<profile>/.plugin-manager/logs/` 最近一次 operation 的报错堆栈；对照官方 `docs/reference/subsystems/{tools,commands,skills,system-prompt}.md` 的注册契约修正 `src/surfaces.js` |
 | 改了源码但报错没变 | 模块缓存：重启 DSH；用 `link:` 安装可省掉重新复制 |
 | 拦截不生效但插件 active | 宿主进程 PATH 里可能没有 `aios`：把该行的 `kernelCommand` 改为绝对路径（如 `C:/Users/<user>/.local/bin/aios.exe`） |
 | 无关项目写不了 `src/` | 在 profile 补丁层覆盖该行，把 `strict` 设为 `false`（记得重述全部 key），未初始化项目即退回只受 Tier 0 约束 |

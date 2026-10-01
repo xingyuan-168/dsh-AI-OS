@@ -17,6 +17,7 @@
 - **注册契约与官方 reference 不符（五处）**：工具缺 `output { schema, render }` 且用了 `handler` 而非 `execute`；拒绝决策写成 `{ type: 'deny' }` 而非 `{ kind: 'deny', reason }`；prompt section 缺必需的 `order`；命令 `handler` 未接收 invocation、返回值形状不对；Skill Provider 缺 `name` 与候选所需的 `rank`/`locator`/`invocation`/`source`/`provider`。全部按 `docs/reference/subsystems/*` 修正，并新增 `tests/integration/test_plugin_surfaces.py` 用桩 ctx 逐项断言，防止再次漂移。
 - **注册面互不连坐**：每个注册面各自 try/catch，某个便利面形状不符不会再让强制面一起失效。
 - **模块缓存**：改动 `src/*.js` 后靠 `set_plugin(target="include:<rowId>")` 重载**不会**读到新代码（实测报错堆栈仍指向旧行号）；改插件源码后必须重启 DSH。`set_plugin` 的正确寻址形式是 `include:` 前缀的 entryId，用包名会得到 `unknown-plugin`。
+- **Cordis 上下文是抛错代理（第二次加载失败的真实根因）**：读取未在 `inject` 里声明的服务会抛 `cannot get property "commands" without inject`，所以 `if (!ctx.commands?.register) return` 这种"先探测再使用"的写法本身就是失败点。现在四个面用到的服务全部声明进 `inject`（`tools`/`commands`/`skills`/`systemPrompt`，均由 `@deepseek-ai/dsh-base` 提供且已确认在树中 active），`surfaces.js` 另用 `ctx.get` 做防御式读取。桩测试已改为**抛错代理**以复现宿主语义，并新增"只有 tools 的最小 profile 下 `apply` 仍不抛错、强制面照常注册"的用例。
 - 安装方式：`link:` spec 让 profile 的 `node_modules` 成为指向本仓库的符号链接，源码即装即用（`file:` 会复制，需要删副本重装）。
 - 当前状态：bundle 已注册进 profile（`dsh.profile.bundles` 含 `ai-engineering-os`），Loader 树条目为 `failed`（上一次加载用的是修复前代码），待重启加载新代码。
 

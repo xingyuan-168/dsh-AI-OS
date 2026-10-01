@@ -308,11 +308,38 @@ async function readSkills() {
   return skills.sort((left, right) => left.name.localeCompare(right.name))
 }
 
+/**
+ * Read one optional host service without tripping Cordis.
+ *
+ * Cordis' context is a proxy: reading `ctx.commands` when `commands` was not
+ * declared in `inject` throws, so a plain truthiness guard is itself the
+ * failure. `ctx.get` is the documented low-level service-store read; the
+ * property read remains a fallback for a context that answers only that way.
+ * Returns undefined when the service is genuinely absent.
+ */
+function optionalService(ctx, key) {
+  try {
+    const service = ctx.get?.(key)
+    if (service) return service
+  } catch {
+    // Not resolvable through the store; try the declared-property path.
+  }
+  try {
+    return ctx[key]
+  } catch {
+    return undefined
+  }
+}
+
 function registerTools(ctx, settings, failures) {
-  if (!ctx.tools?.register) return
+  const tools = optionalService(ctx, 'tools')
+  if (!tools?.register) {
+    failures.push('tools: service unavailable')
+    return
+  }
   for (const definition of TOOL_DEFINITIONS) {
     try {
-      ctx.tools.register({
+      tools.register({
         name: definition.name,
         description: definition.description,
         parameters: definition.parameters,
@@ -339,10 +366,13 @@ function registerTools(ctx, settings, failures) {
 }
 
 function registerCommands(ctx, settings, failures) {
-  if (!ctx.commands?.register) return
+  const commands = optionalService(ctx, 'commands')
+  if (!commands?.register) {
+    return
+  }
   for (const command of COMMAND_DEFINITIONS) {
     try {
-      ctx.commands.register({
+      commands.register({
         name: command.name,
         description: command.description,
         handler: async () => {
@@ -362,10 +392,13 @@ function registerCommands(ctx, settings, failures) {
 }
 
 function registerSkills(ctx, failures) {
-  if (!ctx.skills?.registerProvider) return
+  const skills = optionalService(ctx, 'skills')
+  if (!skills?.registerProvider) {
+    return
+  }
   try {
     ctx.effect(() =>
-      ctx.skills.registerProvider(() => ({
+      skills.registerProvider(() => ({
         name: 'ai-engineering-os',
         list: async () =>
           (await readSkills()).map((skill) => ({
@@ -397,10 +430,13 @@ function registerSkills(ctx, failures) {
 }
 
 function registerPromptSection(ctx, contextText, failures) {
-  if (!ctx.systemPrompt?.section) return
+  const systemPrompt = optionalService(ctx, 'systemPrompt')
+  if (!systemPrompt?.section) {
+    return
+  }
   try {
     ctx.effect(() =>
-      ctx.systemPrompt.section({
+      systemPrompt.section({
         name: 'ai-engineering-os',
         order: SECTION_ORDER,
         text: String(contextText),

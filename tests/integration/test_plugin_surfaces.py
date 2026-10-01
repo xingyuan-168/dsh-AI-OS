@@ -1,10 +1,16 @@
-"""Verify the plugin's surface registrations against the published contracts.
+"""Verify the plugin against the host contracts it actually runs under.
 
-The Cordis registration shapes were the one part an offline environment could
-not check, and getting them wrong cost a load failure. This probe drives
-`registerSurfaces` with a stub context and asserts every registered shape against
-docs/reference/subsystems/{tools,commands,skills,system-prompt}.md, so the
-contract is pinned rather than rediscovered in the host log.
+Two classes of mistake cost real load failures, and both are pinned here:
+
+1. Registration shapes (`docs/reference/subsystems/{tools,commands,skills,
+   system-prompt}.md`): a tool needs `output { schema, render }` and `execute`,
+   a deny is `{ kind: 'deny', reason }`, a prompt section needs a finite `order`,
+   a command handler takes an invocation and returns `{ kind, text }`, and a
+   skill provider needs a name plus candidates carrying rank/locator/invocation/
+   source/provider.
+2. Cordis context semantics: the real `ctx` is a proxy that **throws when a
+   plugin reads a service it did not declare in `inject`**. A plain-object stub
+   cannot catch that, so the stub here throws the same way.
 """
 
 from __future__ import annotations
@@ -24,30 +30,45 @@ NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node.js is required to probe the plugin")
 
 PROBE = """
-import { registerSurfaces } from './src/surfaces.js'
+import { apply } from './src/index.js'
 
-const calls = { tools: [], commands: [], skills: [], sections: [] }
+let input = ''
+for await (const chunk of process.stdin) input += chunk
+const request = JSON.parse(input || '{}')
+const provided = request.provided ?? ['tools', 'commands', 'skills', 'systemPrompt']
+
+const calls = { events: [], tools: [], commands: [], skills: [], sections: [] }
 const disposer = () => () => {}
-const ctx = {
+const services = {
   tools: { register: (definition) => { calls.tools.push(definition); return disposer() } },
   commands: { register: (definition) => { calls.commands.push(definition); return disposer() } },
   skills: { registerProvider: (create) => { calls.skills.push(create); return disposer() } },
   systemPrompt: { section: (section) => { calls.sections.push(section); return disposer() } },
+}
+const base = {
+  on: (name) => { calls.events.push(name); return disposer() },
   effect: (callback) => {
     const cleanup = callback()
     return typeof cleanup === 'function' ? cleanup : disposer()
   },
+  get: (key) => (provided.includes(key) ? services[key] : undefined),
+}
+// Mirror the host: an undeclared service read throws instead of returning undefined.
+const ctx = new Proxy(base, {
+  get(target, prop) {
+    if (prop in target || typeof prop === 'symbol') return target[prop]
+    if (provided.includes(prop)) return services[prop]
+    throw new Error('cannot get property "' + String(prop) + '" without inject')
+  },
+})
+
+let threw = null
+try {
+  await apply(ctx, { kernelCommand: 'aios', timeoutMs: 120000 })
+} catch (error) {
+  threw = error?.stack ?? String(error)
 }
 
-const failures = registerSurfaces(
-  ctx,
-  { kernelCommand: 'aios', timeoutMs: 120000 },
-  'CONSTITUTION TEXT',
-)
-
-// Exercise one tool end to end through the stub so the wiring is proven, not
-// just the shape: execute() must return the kernel envelope and render() must
-// turn it into a text content block.
 const status = calls.tools.find((tool) => tool.name === 'context_refresh')
 let executed = null
 let rendered = null
@@ -68,7 +89,6 @@ if (calls.skills.length > 0) {
   const body = first ? await provider.get(first, {}) : null
   skills = {
     providerName: provider.name,
-    listIsArray: Array.isArray(candidates),
     count: candidates.length,
     firstKeys: first ? Object.keys(first).sort() : [],
     hasContent: typeof body?.content === 'string' && body.content.length > 0,
@@ -76,7 +96,8 @@ if (calls.skills.length > 0) {
 }
 
 process.stdout.write(JSON.stringify({
-  failures,
+  threw,
+  events: calls.events,
   tools: calls.tools.map((tool) => ({
     name: tool.name,
     hasExecute: typeof tool.execute === 'function',
@@ -100,14 +121,17 @@ process.stdout.write(JSON.stringify({
 }))
 """
 
+FULL_PROFILE = ["tools", "commands", "skills", "systemPrompt"]
 
-def _probe(project_root: Path) -> dict:
+
+def _probe(project_root: Path, provided: list[str] | None = None) -> dict:
     environment = {
         **os.environ,
         "PATH": str(Path(sys.executable).parent) + os.pathsep + os.environ["PATH"],
     }
     result = subprocess.run(
         [str(NODE), "--input-type=module", "-e", PROBE],
+        input=json.dumps({"provided": provided or FULL_PROFILE}),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -119,9 +143,10 @@ def _probe(project_root: Path) -> dict:
     return json.loads(result.stdout)
 
 
-def test_surfaces_register_without_failures(governed_repo: Path) -> None:
+def test_apply_registers_enforcement_and_both_listeners(governed_repo: Path) -> None:
     report = _probe(governed_repo)
-    assert report["failures"] == []
+    assert report["threw"] is None, report["threw"]
+    assert report["events"] == ["tools/pre-execute", "agent/created"]
 
 
 def test_every_tool_declares_the_required_output_contract(governed_repo: Path) -> None:
@@ -173,8 +198,31 @@ def test_skill_provider_exposes_candidates_and_bodies(governed_repo: Path) -> No
     skills = report["skills"]
     assert skills is not None
     assert skills["providerName"] == "ai-engineering-os"
-    assert skills["listIsArray"] is True
     assert skills["count"] == 8
     for key in ("invocation", "locator", "name", "provider", "rank", "source"):
         assert key in skills["firstKeys"], key
     assert skills["hasContent"] is True
+
+
+def test_apply_survives_a_profile_without_the_convenience_services(governed_repo: Path) -> None:
+    """A missing convenience service must not take enforcement down with it."""
+
+    report = _probe(governed_repo, provided=["tools"])
+    assert report["threw"] is None, report["threw"]
+    assert "tools/pre-execute" in report["events"]
+    assert len(report["tools"]) == 8
+    assert report["commands"] == []
+    assert report["sections"] == []
+
+
+def test_inject_declares_every_service_the_plugin_reads() -> None:
+    """The host throws on an undeclared read, so the declared set is the contract.
+
+    Driving `apply` with a throwing proxy (above) proves the plugin never touches
+    a service outside `inject` on the paths it takes.
+    """
+
+    entry = (PLUGIN_ROOT / "src" / "index.js").read_text(encoding="utf-8")
+    declared = entry.split("export const inject =", 1)[1].split("\n", 1)[0]
+    for service in FULL_PROFILE:
+        assert f"'{service}'" in declared, service
