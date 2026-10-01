@@ -1,7 +1,7 @@
 -- ADR-0016: governance-core runtime schema.
 -- Four tables only. Memory facts live in the Git-tracked
 -- docs/memory/memory.jsonl; memory_index is a locally rebuildable search
--- index refreshed by "aios memory reindex".
+-- index refreshed by "codex-os memory reindex".
 
 CREATE TABLE tasks (
     id TEXT PRIMARY KEY,
