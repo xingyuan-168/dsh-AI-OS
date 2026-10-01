@@ -20,6 +20,10 @@
  * pre-dispatch listener receives the execution and `next`, and returns the
  * host's decision type. `next()` is returned whenever AIOS does not deny, so a
  * mistranslated verdict can only fail to block — it can never auto-approve.
+ *
+ * Surface registrations follow the published contracts in
+ * `docs/reference/subsystems/{tools,commands,skills,system-prompt}.md`; see
+ * `./surfaces.js` for the per-surface shapes and their isolation.
  */
 
 import { adjudicate } from './kernel.js'
@@ -43,11 +47,16 @@ const FALLBACK_CONTEXT =
 /**
  * Map an AIOS verdict onto the host's pre-dispatch verdict.
  *
- * This is the single place to correct if the host's decision type differs: the
- * AIOS rule id is always carried in the reason so a block is attributable.
+ * `PreToolDecision` is `{ kind: 'deny' | 'allow' | 'cancel' | 'ask', ... }`; a
+ * deny carries its model-facing `reason` plus optional structured identity, so a
+ * block stays attributable to one AIOS rule.
  */
 function preToolVerdict(decision) {
-  return { type: 'deny', reason: `${decision.rule_id}: ${decision.reason}` }
+  return {
+    kind: 'deny',
+    reason: `${decision.rule_id}: ${decision.reason}`,
+    info: { name: 'AIOSGovernanceError', code: String(decision.rule_id) },
+  }
 }
 
 async function sessionContext(settings) {

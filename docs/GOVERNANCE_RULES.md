@@ -50,34 +50,71 @@
 
 ## 安装与强制
 
-安装分两步，第二步无法由源码或本机文件证明：
+本包是一个 **DSH bundle**：一个携带配置层的 npm 包。官方对 bundle 与 profile 的分工很明确——**作者产出 bundle，用户启动 profile，没有东西同时是两者**（[打包与安装插件](https://deepseek-harness.github.io/deepseek-harness/en/develop/basic/publish.md)）。
 
-1. **装依赖**：`plugin_manager install_bundle` 以本地路径 spec 安装本包（例如 `file:<repo>/plugins/ai-engineering-os`）。pnpm 会把包链接进 `~/.dsh/profiles/<profile>/node_modules/`。该调用返回 `not-bundle` 且 `changed: false`：本包是**插件**而不是 bundle，它不向 profile 根插入行，因此这一步只负责让模块可解析。
-2. **接进补丁层**：在 `~/.dsh/profiles/<profile>/cordis.patch.yml` 追加一个条目，`id` 与 `name` 用 `ai-engineering-os`，`config` 即全局策略（`strict`、`kernelCommand`、`timeoutMs`、`failMode`）。这是 profile 唯一的策略来源，插件不读第二份策略文件。条目形状与既有内建条目一致（`- id / name / config`），补丁层自身文档说明它支持 insert list。
+### 三个文件
 
-**激活必须重启 DSH**（截至 0.2.0-rc.2，已实测无在线激活路径）：
+```
+plugins/ai-engineering-os/
+├── package.json       # 声明 dsh.bundle.patch
+├── cordis.patch.yml   # profile 列出该 bundle 时应用的层
+└── src/index.js       # 插件入口（patch 行按包名引用到它）
+```
 
-- 运行中的宿主只暴露按**已合成树**寻址的接口：`plugin_manager set_plugin(target="ai-engineering-os")` 返回 `unknown-plugin`，因为该条目还没进树；`install_bundle` 重复执行仍是 `not-bundle`、`changed: false`。
-- 补丁层在**启动时**合成进 Loader 树；直接改文件不会触发重新合成，`configEditor` 是插件无法调用的 Service。
-- 因此：改完补丁层 → 重启 DSH → `plugin_manager list_plugins` 条目总数应从 186 变为 187，且 `cordis_inspect_query(host, Tool, listTools)` 应出现 8 个治理工具。
+- `package.json` 必须有 `"dsh": { "bundle": { "patch": "./cordis.patch.yml" } }`，且 **`files` 必须包含该 patch 文件**（官方点名的最常见漏项：漏了它，包能装上但配置层不会被挂载）。
+- 包内 patch 用 **insert** 语法插入自己的行：
+  ```yaml
+  - insert:
+      - id: ai-engineering-os
+        name: ai-engineering-os
+        config: { strict: true, kernelCommand: aios, timeoutMs: 10000, failMode: closed }
+  ```
+  覆盖式条目（`- id / name / config`）只按 id 命中**已存在**的行；用它新增行会静默匹配不到，什么都不发生。
 
-激活与否的三种证据强度不同，必须分开陈述：
+### 安装
 
-- `aios doctor` 的 `plugin-manifest` 只证明"本包在磁盘上"，`dsh-profile` 只证明"某个 profile 声明了它"；两者都不是已加载，所以返回 `ok: null` 而不是通过。
-- `plugin_manager list_plugins` 证明宿主当前 Loader 树里有这个条目。
-- 真正的强制只由**新会话的实际行为**证明：在已治理项目里写 `input/` 应被拒并给出规则编号；对 `docs/` 的写入应放行；未初始化项目在 `strict` 下写 `src/` 应被 `CODE_START_BLOCKED` 拒绝。
+`plugin_manager install_bundle` 以本地路径 spec 安装：
 
-源码验证不等于已安装，安装不等于已加载，加载不等于宿主未禁用。
+- `file:<repo>/plugins/ai-engineering-os`：pnpm 把目录**复制**进 `node_modules`，改了源码要删掉副本重装才会同步。
+- `link:<repo>/plugins/ai-engineering-os`：pnpm 建**符号链接**，源码即装即用。推荐开发时用这个。
+
+成功时管理器会把依赖与 bundle 名写进 profile：`dependencies` 加一项、`dsh.profile.bundles` 追加 `ai-engineering-os`。若返回 `not-bundle`，就是 `dsh.bundle` 没被识别。
+
+### 层顺序与覆盖
+
+生效配置按顺序合成：**各 bundle 的 patch（按 `dsh.profile.bundles` 顺序）→ profile 自己的 `cordis.patch.yml` → `$DSH_HOME/cordis.patch.yml` → 各 `--patch` 覆盖层**，越靠后越优先。补丁按行**整行替换** `config`，不做深合并——所以在 profile 里覆盖本插件那一行时，必须重述该行需要的每个 key。
+
+### 激活与验证
+
+- 运行中的宿主可以按条目 id 重新应用：`plugin_manager set_plugin(target="include:ai-engineering-os")`（注意是 `include:` 前缀的 entryId，用包名会得到 `unknown-plugin`）。
+- 但**重载会复用已缓存的旧模块**：改完 `src/*.js` 后靠重载不会读到新代码（实测：错误堆栈仍指向改动前的行号）。**改插件源码后必须重启 DSH**。
+- 激活与否的证据强度不同，必须分开陈述：`aios doctor` 的 `plugin-manifest` 只证明包在磁盘上、`dsh-profile` 只证明 profile 声明了它（两者都返回 `ok: null`）；`plugin_manager list_plugins` 证明条目在 Loader 树里；真正的强制只由**新会话的实际行为**证明。
+- 源码验证不等于已安装，安装不等于已加载，加载不等于宿主未禁用。
 
 ### 排障
 
 | 现象 | 处置 |
 | --- | --- |
-| 重启后条目仍是 186 | 补丁层没被读到：核对 `cordis.patch.yml` 的 YAML 缩进与 `name` 是否等于包名 `ai-engineering-os` |
-| 条目存在但 `fiberPhase` 非 active | 插件加载失败（宿主会隔离）：读 `~/.dsh/profiles/<profile>/.plugin-manager/logs/` 最近一次 operation 的日志，按报错改 `src/surfaces.js` / `src/index.js` 的注册形状 |
-| 拦截不生效但插件 active | 宿主进程的 PATH 里可能没有 `aios`：把补丁条目的 `kernelCommand` 改成绝对路径（如 `C:/Users/<user>/.local/bin/aios.exe`） |
-| 无关项目写不了 `src/` | 把补丁条目的 `strict` 改成 `false`，未初始化项目退回到只受 Tier 0 约束 |
-| 需要完全回滚 | `plugin_manager remove_bundle ai-engineering-os` + 删除补丁条目 + 删 `node_modules/ai-engineering-os`；CLI 与仓库事实不受影响 |
+| 条目数没变化 | `dsh.bundle` 或包内 `cordis.patch.yml` 没被识别：核对键名与 `files` 是否包含该文件 |
+| `install_bundle` 返回 `not-bundle` | 同上；另外 profile 里可能残留上一轮的**旧副本**，删掉 `node_modules/ai-engineering-os` 再装 |
+| `set_plugin` 用包名报 `unknown-plugin` | 改用 `include:<rowId>` 形式寻址 |
+| 条目存在但 `fiberPhase: failed` | 插件 `apply` 抛错（宿主会隔离）：读 `~/.dsh/profiles/<profile>/.plugin-manager/logs/` 最近一次 operation 的报错堆栈；对照官方 `docs/reference/subsystems/{tools,commands,skills,system-prompt}.md` 的注册契约修正 `src/surfaces.js` |
+| 改了源码但报错没变 | 模块缓存：重启 DSH；用 `link:` 安装可省掉重新复制 |
+| 拦截不生效但插件 active | 宿主进程 PATH 里可能没有 `aios`：把该行的 `kernelCommand` 改为绝对路径（如 `C:/Users/<user>/.local/bin/aios.exe`） |
+| 无关项目写不了 `src/` | 在 profile 补丁层覆盖该行，把 `strict` 设为 `false`（记得重述全部 key），未初始化项目即退回只受 Tier 0 约束 |
+| 需要完全回滚 | `plugin_manager remove_bundle ai-engineering-os`（必要时再删 profile manifest 里的 `dependencies`/`bundles` 项与 `node_modules/ai-engineering-os`）；CLI 与仓库事实不受影响 |
+
+### 插件暴露的注册面
+
+插件只在一处强制、其余为便利面。契约形状来自官方 reference，且由 `tests/integration/test_plugin_surfaces.py` 用桩 ctx 逐项断言：
+
+- `tools/pre-execute`：唯一的派发前拒绝点。
+- 8 个工具：`{ name, description, parameters, output: { schema, render }, execute }`。
+- 3 个人工命令：`{ name, description, handler(invocation) }`，返回 `{ kind: 'success' | 'error', text }`。
+- 1 个 Skill Provider：`{ name, list(options), get(candidate, options) }`，候选需要 `rank` / `locator` / `invocation` / `source` / `provider`。
+- 1 个 prompt section：`{ name, order, text }`，`order` 必须有限。
+
+每个注册面各自 try/catch 隔离：某个便利面形状不符不会连带让强制面失效。
 
 三层强制模型见 AGENTS.md「强制分层」。Tier 0 基线在**任何工作区**恒定开启，项目配置不可关闭；Tier 1 需要 `.aios/project.yaml`；Tier 2（默认开启）使未初始化项目同样套用 Tier 1，且只在内存中物化默认配置，不静默写盘。
 

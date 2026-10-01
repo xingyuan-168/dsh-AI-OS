@@ -16,9 +16,15 @@
     ".": "./src/index.js"
   },
   "files": [
+    "cordis.patch.yml",
     "src",
     "skills"
   ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
   "engines": {
     "node": ">=20"
   },

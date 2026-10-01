@@ -22,11 +22,13 @@ EXPECTED_SKILLS = {
 PLUGIN_ROOT = Path(__file__).resolve().parents[2] / "plugins" / "ai-engineering-os"
 SKILLS_ROOT = PLUGIN_ROOT / "skills"
 
-# The host integration is a DSH Cordis plugin: a package manifest plus a plugin
-# entry, with no Codex-specific manifest, hook manifest, or MCP declaration.
+# The host integration is a DSH Cordis bundle: a package manifest that declares
+# dsh.bundle.patch, that patch layer, and the plugin entry it references.
 PLUGIN_MANIFEST = "package.json"
 PLUGIN_ENTRY = "src/index.js"
 PLUGIN_MODULES = ("src/index.js", "src/kernel.js", "src/payload.js", "src/surfaces.js")
+BUNDLE_PATCH = "cordis.patch.yml"
+BUNDLE_ROW_ID = "ai-engineering-os"
 CODEX_ARTIFACTS = (
     ".codex-plugin/plugin.json",
     ".mcp.json",
@@ -58,16 +60,50 @@ def test_no_codex_host_artifacts_remain() -> None:
     assert leftover == [], "per-skill Codex agent profiles must not remain"
 
 
-def test_plugin_manifest_is_a_dsh_package() -> None:
+def test_plugin_manifest_is_a_dsh_bundle() -> None:
+    """A package without dsh.bundle installs as a plain dependency and activates
+    no layer, which is exactly how the first activation attempt failed."""
+
     manifest = json.loads((PLUGIN_ROOT / PLUGIN_MANIFEST).read_text(encoding="utf-8"))
-    assert manifest["name"] == "ai-engineering-os"
+    assert manifest["name"] == BUNDLE_ROW_ID
     assert manifest["type"] == "module"
     assert manifest["exports"]["."] == "./" + PLUGIN_ENTRY
+    assert manifest["dsh"]["bundle"]["patch"] == "./" + BUNDLE_PATCH
+    # Shipping the patch file is the documented packaging pitfall: without it the
+    # layer never reaches the installing profile.
+    assert BUNDLE_PATCH in manifest["files"], "the bundle patch must be shipped"
+    assert "src" in manifest["files"]
     assert "skills" in manifest["files"]
     assert "mcpServers" not in manifest
     # Codex declared the skill directory by path; DSH receives skills through the
     # plugin's own provider registration instead.
     assert "skills" not in {key for key in manifest if key == "skills"}
+
+
+def test_bundle_patch_inserts_the_governance_row() -> None:
+    """New rows must use insert syntax: an override entry targets an existing id
+    and silently matches nothing when the row does not exist yet."""
+
+    import yaml
+
+    layer = yaml.safe_load((PLUGIN_ROOT / BUNDLE_PATCH).read_text(encoding="utf-8"))
+    assert isinstance(layer, list) and layer, "the patch layer is a non-empty array"
+    inserted = [
+        row for entry in layer if isinstance(entry, dict) for row in entry.get("insert", [])
+    ]
+    assert len(inserted) == 1, "exactly one row is inserted"
+    row = inserted[0]
+    assert row["id"] == BUNDLE_ROW_ID
+    assert row["name"] == BUNDLE_ROW_ID
+    # Later layers replace a row's whole config, so the defaults must be complete.
+    assert row["config"] == {
+        "strict": True,
+        "kernelCommand": "aios",
+        "timeoutMs": 10000,
+        "failMode": "closed",
+    }
+    # Override entries in this layer would match no existing row.
+    assert all("id" not in entry for entry in layer if isinstance(entry, dict))
 
 
 def test_plugin_entry_declares_the_cordis_contract() -> None:

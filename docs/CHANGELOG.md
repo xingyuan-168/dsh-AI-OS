@@ -8,11 +8,17 @@
 
 ## Unreleased
 
-### 插件激活状态（2026-10-01 实测）
+### 插件打包与激活修复（2026-10-01 实测）
 
-- 截至 DSH 0.2.0-rc.2 **没有在线激活路径**：`plugin_manager set_plugin(target="ai-engineering-os")` 返回 `unknown-plugin`（条目尚未进合成树），重复 `install_bundle` 仍为 `not-bundle` / `changed: false`，直接改 `cordis.patch.yml` 也不会触发重新合成。
-- 因此插件的加载**必须重启 DSH**；重启前强制层不生效，`aios` CLI 本身不受影响。
-- 已落成事实与排障表：`docs/GOVERNANCE_RULES.md`「安装与强制」「排障」；使用方式见 `README.md`「如何使用」。
+根因不是"DSH 需要重启"这么简单，而是两处打包/语法错误加一处模块缓存：
+
+- **缺 `dsh.bundle` 声明**：官方明确写着没有该字段的包"仍可安装，但只作为普通依赖、不激活任何层"。这正是 `install_bundle` 返回 `not-bundle`、profile `dependencies` 一直为空的原因。现已按官方三文件结构声明 `dsh.bundle.patch`，并把 patch 文件列进 `files`（官方点名的最常见漏项）。
+- **补丁语法用错**：新增行必须用 insert 形式 `- insert: [ { id, name } ]`；此前用的 `- id / name / config` 是覆盖形式，只按 id 命中已存在的行，新增时静默无效。
+- **注册契约与官方 reference 不符（五处）**：工具缺 `output { schema, render }` 且用了 `handler` 而非 `execute`；拒绝决策写成 `{ type: 'deny' }` 而非 `{ kind: 'deny', reason }`；prompt section 缺必需的 `order`；命令 `handler` 未接收 invocation、返回值形状不对；Skill Provider 缺 `name` 与候选所需的 `rank`/`locator`/`invocation`/`source`/`provider`。全部按 `docs/reference/subsystems/*` 修正，并新增 `tests/integration/test_plugin_surfaces.py` 用桩 ctx 逐项断言，防止再次漂移。
+- **注册面互不连坐**：每个注册面各自 try/catch，某个便利面形状不符不会再让强制面一起失效。
+- **模块缓存**：改动 `src/*.js` 后靠 `set_plugin(target="include:<rowId>")` 重载**不会**读到新代码（实测报错堆栈仍指向旧行号）；改插件源码后必须重启 DSH。`set_plugin` 的正确寻址形式是 `include:` 前缀的 entryId，用包名会得到 `unknown-plugin`。
+- 安装方式：`link:` spec 让 profile 的 `node_modules` 成为指向本仓库的符号链接，源码即装即用（`file:` 会复制，需要删副本重装）。
+- 当前状态：bundle 已注册进 profile（`dsh.profile.bundles` 含 `ai-engineering-os`），Loader 树条目为 `failed`（上一次加载用的是修复前代码），待重启加载新代码。
 
 ### DSH 宿主迁移与全局强制（2026-10-01，ADR-0018，breaking change）
 

@@ -35,15 +35,18 @@ AI Engineering OS 是 DeepSeek Harness 的**工程治理层**：无状态三 Gat
 | --- | --- | --- |
 | `aios` 命令行 | **已可用** | 全局安装完成，`aios --help` 直接可用 |
 | CLI 的 Gate 判定 | **已可用** | `check` / `finish` / `authorize-dsh` 均已实测 |
-| DSH 插件强制 | **未激活** | 包已装进 profile、补丁条目已写；**需要重启 DSH** 才会加载（见下） |
+| DSH 插件强制 | **已装好，待重启加载** | bundle 已注册进 profile（`dsh.profile.bundles` 含 `ai-engineering-os`，`node_modules` 为指向本仓库的符号链接），Loader 树里已有条目；但该条目当前是 `failed` 状态，因为它的上一次加载用的是修复前的代码 |
 
-在插件激活之前，**没有任何自动拦截**：不会阻止你写 `input/`，也不会阻止 force push。只有你自己或 Agent 主动调用 `aios` 时才受治理。
+在插件真正加载之前，**没有任何自动拦截**：不会阻止你写 `input/`，也不会阻止 force push。只有你自己或 Agent 主动调用 `aios` 时才受治理。
 
-### 激活（一次性）
+### 激活（重启一次即可）
 
 1. 重启 DeepSeek Harness。
-2. 重启后确认：`plugin_manager list_plugins` 的条目总数从 186 变成 187；`cordis_inspect_query(host, Tool, listTools)` 里出现 8 个治理工具。
-3. 再确认行为：对 `input/` 的写入被拒并带规则编号，对 `docs/` 的写入放行。
+2. 重启后确认条目已激活：`plugin_manager list_plugins` 里 `include:ai-engineering-os` 的 `fiberPhase` 应为 `active`（不再是 `failed`）。
+3. 确认工具面已就绪：`cordis_inspect_query(host, Tool, listTools)` 里应出现 8 个治理工具（`governance_check`、`project_init`、`approval_record`、`context_refresh`、`worktree_manage`、`memory_search`、`memory_record`、`memory_candidate`）。
+4. 确认行为：对 `input/` 的写入被拒并带规则编号，对 `docs/` 的写入放行。
+
+**注意**：修改 `plugins/ai-engineering-os/src/*.js` 之后也必须重启——运行中的宿主重载时会复用已缓存的旧模块（这一点已实测）。
 
 重启后如果没生效，按 [治理规则·排障](docs/GOVERNANCE_RULES.md) 的表格逐项排查。
 

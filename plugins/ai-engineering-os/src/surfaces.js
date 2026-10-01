@@ -2,16 +2,18 @@
  * The eight governance tools, the human commands, the skill catalogue, and the
  * constitution section — registered on whichever surfaces the host exposes.
  *
- * Every registration is guarded: a profile that lacks a surface keeps the
- * others instead of failing to load. All work is delegated to the `aios`
- * kernel, so nothing here can disagree with the CLI or the MCP server.
+ * Every registration is delegated to the `aios` kernel, so nothing here can
+ * disagree with the CLI or the MCP server. Each surface is registered inside its
+ * own guard: the pre-dispatch enforcement listener must keep working even if an
+ * optional surface rejects a shape, because losing enforcement to a broken
+ * command would be the worst possible failure mode.
  *
- * Assumed host contracts (confirm against the installed host types):
- *   - `ctx.tools.register` takes a definition with a name, description,
- *     input schema, and handler.
- *   - `ctx.commands.register`, `ctx.skills.registerProvider`, and
- *     `ctx.systemPrompt.section` take the forms documented by the host.
- * A shape mismatch surfaces as a registration error, never as a silent allow.
+ * Shapes follow the published host contracts
+ * (docs/reference/subsystems/{tools,commands,skills,system-prompt}.md):
+ *   - tool: { name, description, parameters, output: { schema, render }, execute }
+ *   - command: { name, description, handler(invocation) -> { kind, text } }
+ *   - prompt section: { name, order, text }
+ *   - skill provider: { name, list(options), get(candidate, options) }
  */
 
 import { spawn } from 'node:child_process'
@@ -22,12 +24,30 @@ import { dirname, join } from 'node:path'
 const HERE = dirname(fileURLToPath(import.meta.url))
 export const SKILLS_DIRECTORY = join(HERE, '..', 'skills')
 
-/** Tool name -> `aios` argv prefix. Argument names mirror the MCP contract. */
+// Placement for the constitution section. The centrally allocated names live in
+// the host's own enum; a plugin-owned section picks an explicit finite order.
+const SECTION_ORDER = 500
+
+// Skill rank: lower wins inside one registry layer. These are plugin-bundled
+// instructions, so they sit below project-local skills.
+const SKILL_RANK = 50
+const SKILL_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+
+/** Tool name -> `aios` argv builder. Argument names mirror the MCP contract. */
 export const TOOL_DEFINITIONS = [
   {
     name: 'project_init',
     description:
       'Initialize a governed project: configuration, minimal documents, runtime database.',
+    parameters: {
+      project_root: { type: 'string', description: 'Project root to create.', required: true },
+      project_id: { type: 'string', description: 'Stable id, e.g. PROJECT-001.', required: true },
+      name: { type: 'string', description: 'Human-readable project name.', required: true },
+      project_type: {
+        type: 'string',
+        description: 'backend | frontend | fullstack | desktop | generic',
+      },
+    },
     argv: (args) => [
       'init',
       String(args.project_root),
@@ -38,12 +58,25 @@ export const TOOL_DEFINITIONS = [
       ...(args.project_type ? ['--project-type', String(args.project_type)] : []),
       '--json',
     ],
-    required: ['project_root', 'project_id', 'name'],
   },
   {
     name: 'governance_check',
     description:
       'Run one stateless gate (start, frontend, or finish) and return allowed plus findings.',
+    parameters: {
+      project_root: {
+        type: 'string',
+        description: 'Project root, subdirectory, or worktree.',
+        required: true,
+      },
+      stage: { type: 'string', description: 'start | frontend | finish', required: true },
+      change_class: { type: 'string', description: 'Required for formal code changes.' },
+      requirement_id: { type: 'string', description: 'Research-required classes only.' },
+      base_ref: { type: 'string', description: 'Task-start commit; required for finish.' },
+      test_command: { type: 'string', description: 'Declared test command to run at finish.' },
+      memory_written: { type: 'boolean', description: 'Durable memory was recorded.' },
+      memory_not_needed: { type: 'boolean', description: 'Nothing durable was learned.' },
+    },
     argv: (args) => [
       args.stage === 'finish' ? 'finish' : 'check',
       String(args.project_root),
@@ -51,15 +84,24 @@ export const TOOL_DEFINITIONS = [
       ...(args.requirement_id ? ['--requirement-id', String(args.requirement_id)] : []),
       ...(args.test_command ? ['--test-command', String(args.test_command)] : []),
       ...(args.base_ref ? ['--base-ref', String(args.base_ref)] : []),
+      ...(args.memory_written ? ['--memory-written'] : []),
       ...(args.memory_not_needed ? ['--memory-not-needed'] : []),
       '--json',
     ],
-    required: ['project_root', 'stage'],
   },
   {
     name: 'approval_record',
     description:
       'Record a user approval or rejection for a gate; a frontend decision is written into UI_SPEC.md.',
+    parameters: {
+      project_root: { type: 'string', description: 'Project root.', required: true },
+      gate: { type: 'string', description: 'code_start | frontend | finish', required: true },
+      subject: { type: 'string', description: 'What the user approved.', required: true },
+      decided_by: { type: 'string', description: 'Who decided.', required: true },
+      decision: { type: 'string', description: 'approved | rejected' },
+      scope: { type: 'string', description: 'Exact scope; scopes never inherit.' },
+      reason: { type: 'string', description: 'Optional reason.' },
+    },
     argv: (args) => [
       'approval',
       'record',
@@ -77,17 +119,28 @@ export const TOOL_DEFINITIONS = [
       ...(args.reason ? ['--reason', String(args.reason)] : []),
       '--json',
     ],
-    required: ['project_root', 'gate', 'subject', 'decided_by'],
   },
   {
     name: 'context_refresh',
     description: 'Regenerate the derived PROJECT_CONTEXT.md cache.',
+    parameters: {
+      project_root: { type: 'string', description: 'Project root.', required: true },
+    },
     argv: (args) => ['context', 'refresh', String(args.project_root), '--json'],
-    required: ['project_root'],
   },
   {
     name: 'worktree_manage',
     description: 'Disposable worktree lifecycle: prepare, check, finish, cleanup, or list.',
+    parameters: {
+      project_root: { type: 'string', description: 'Project root.', required: true },
+      action: {
+        type: 'string',
+        description: 'prepare | check | finish | cleanup | list',
+        required: true,
+      },
+      name: { type: 'string', description: 'Worktree slug.' },
+      task_id: { type: 'string', description: 'Optional task id.' },
+    },
     argv: (args) => [
       'worktree',
       String(args.action),
@@ -96,11 +149,15 @@ export const TOOL_DEFINITIONS = [
       ...(args.task_id ? ['--task-id', String(args.task_id)] : []),
       '--json',
     ],
-    required: ['project_root', 'action'],
   },
   {
     name: 'memory_search',
     description: 'Refresh the index from the Git-tracked JSONL and search durable memory.',
+    parameters: {
+      project_root: { type: 'string', description: 'Project root.', required: true },
+      query: { type: 'string', description: 'Search query.', required: true },
+      limit: { type: 'number', description: 'Maximum hits.' },
+    },
     argv: (args) => [
       'memory',
       'search',
@@ -109,14 +166,26 @@ export const TOOL_DEFINITIONS = [
       ...(args.limit ? ['--limit', String(args.limit)] : []),
       '--json',
     ],
-    required: ['project_root', 'query'],
   },
   {
     name: 'memory_record',
     description: 'Write one durable record, or submit a candidate from a subagent.',
+    parameters: {
+      project_root: { type: 'string', description: 'Project root.', required: true },
+      record_type: {
+        type: 'string',
+        description: 'decision | bug | lesson | pattern',
+        required: true,
+      },
+      title: { type: 'string', description: 'Record title.', required: true },
+      summary: { type: 'string', description: 'What was learned.', required: true },
+      source: { type: 'string', description: 'Source path or URL.', required: true },
+      candidate: { type: 'boolean', description: 'Submit as a subagent candidate.' },
+    },
     argv: (args) => [
       'memory',
       'record',
+      '--project-root',
       String(args.project_root),
       '--type',
       String(args.record_type),
@@ -129,30 +198,43 @@ export const TOOL_DEFINITIONS = [
       ...(args.candidate ? ['--candidate'] : []),
       '--json',
     ],
-    required: ['project_root', 'record_type', 'title', 'summary', 'source'],
   },
   {
     name: 'memory_candidate',
     description: 'List, accept, or reject a subagent memory candidate.',
+    parameters: {
+      project_root: { type: 'string', description: 'Project root.', required: true },
+      action: { type: 'string', description: 'list | accept | reject', required: true },
+      candidate_id: { type: 'string', description: 'Candidate id for accept/reject.' },
+    },
     argv: (args) => [
       'memory',
       'candidate',
       String(args.candidate_id ?? ''),
       ...(args.action === 'accept' ? ['--accept'] : []),
       ...(args.action === 'reject' ? ['--reject'] : []),
+      '--project-root',
+      String(args.project_root),
       '--json',
     ],
-    required: ['action'],
   },
 ]
 
 export const COMMAND_DEFINITIONS = [
-  { name: 'aios-check', argv: ['check', '.', '--json'], description: 'Preview governance blockers.' },
-  { name: 'aios-status', argv: ['doctor', '--json'], description: 'Report runtime diagnostics.' },
+  {
+    name: 'aios-check',
+    description: 'Preview governance blockers for the current directory.',
+    argv: ['check', '.', '--json'],
+  },
+  {
+    name: 'aios-status',
+    description: 'Report AI Engineering OS runtime diagnostics.',
+    argv: ['doctor', '--json'],
+  },
   {
     name: 'aios-memory',
-    argv: ['memory', 'candidates', '.', '--json'],
     description: 'List pending memory candidates.',
+    argv: ['memory', 'candidates', '.', '--json'],
   },
 ]
 
@@ -199,6 +281,13 @@ export function runAios(command, argv, timeoutMs) {
   })
 }
 
+/** Read the kebab-case name and description out of one SKILL.md frontmatter. */
+function parseSkill(name, body) {
+  const match = /^---\s*\n([\s\S]*?)\n---/.exec(body)
+  const description = match ? /^description:\s*(.+)$/m.exec(match[1])?.[1]?.trim() : undefined
+  return { name, description: description ?? name, body }
+}
+
 async function readSkills() {
   let entries = []
   try {
@@ -208,72 +297,130 @@ async function readSkills() {
   }
   const skills = []
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue
+    if (!entry.isDirectory() || !SKILL_NAME_PATTERN.test(entry.name)) continue
     try {
       const body = await readFile(join(SKILLS_DIRECTORY, entry.name, 'SKILL.md'), 'utf8')
-      skills.push({ name: entry.name, body })
+      skills.push(parseSkill(entry.name, body))
     } catch {
       // A skill without a readable manifest is skipped, never invented.
     }
   }
-  return skills
+  return skills.sort((left, right) => left.name.localeCompare(right.name))
 }
 
-export function registerSurfaces(ctx, settings, contextText) {
-  if (ctx.tools?.register) {
-    for (const definition of TOOL_DEFINITIONS) {
+function registerTools(ctx, settings, failures) {
+  if (!ctx.tools?.register) return
+  for (const definition of TOOL_DEFINITIONS) {
+    try {
       ctx.tools.register({
         name: definition.name,
         description: definition.description,
-        handler: async (args = {}) => {
-          const missing = (definition.required ?? []).filter((key) => !args[key])
-          if (missing.length > 0) {
-            return { ok: false, error: `missing required arguments: ${missing.join(', ')}` }
-          }
+        parameters: definition.parameters,
+        output: {
+          // The kernel's envelope is arbitrary JSON, so the canonical output is
+          // declared unconstrained and rendered as text.
+          schema: {},
+          render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }],
+        },
+        execute: async (args = {}) => {
           const outcome = await runAios(
             String(settings.kernelCommand ?? 'aios'),
-            definition.argv(args),
+            definition.argv(args ?? {}),
             Number(settings.timeoutMs ?? 10000),
           )
-          return outcome.ok ? outcome.result : { ok: false, error: outcome.error }
+          if (!outcome.ok) throw new Error(String(outcome.error))
+          return outcome.result
         },
       })
+    } catch (error) {
+      failures.push(`tool ${definition.name}: ${error?.message ?? String(error)}`)
     }
   }
+}
 
-  if (ctx.commands?.register) {
-    for (const command of COMMAND_DEFINITIONS) {
+function registerCommands(ctx, settings, failures) {
+  if (!ctx.commands?.register) return
+  for (const command of COMMAND_DEFINITIONS) {
+    try {
       ctx.commands.register({
         name: command.name,
         description: command.description,
-        handler: () =>
-          runAios(
+        handler: async () => {
+          const outcome = await runAios(
             String(settings.kernelCommand ?? 'aios'),
             command.argv,
             Number(settings.timeoutMs ?? 10000),
-          ),
+          )
+          if (!outcome.ok) return { kind: 'error', text: String(outcome.error) }
+          return { kind: 'success', text: JSON.stringify(outcome.result, null, 2) }
+        },
       })
+    } catch (error) {
+      failures.push(`command ${command.name}: ${error?.message ?? String(error)}`)
     }
   }
+}
 
-  if (ctx.skills?.registerProvider) {
-    const provider = {
-      list: async () =>
-        (await readSkills()).map((skill) => ({ name: skill.name, description: skill.name })),
-      get: async (skillName) => {
-        const skill = (await readSkills()).find((item) => item.name === skillName)
-        return skill ? { name: skill.name, content: skill.body } : undefined
-      },
-    }
-    ctx.effect(() => ctx.skills.registerProvider(() => provider))
+function registerSkills(ctx, failures) {
+  if (!ctx.skills?.registerProvider) return
+  try {
+    ctx.effect(() =>
+      ctx.skills.registerProvider(() => ({
+        name: 'ai-engineering-os',
+        list: async () =>
+          (await readSkills()).map((skill) => ({
+            name: skill.name,
+            description: skill.description,
+            rank: SKILL_RANK,
+            locator: skill.name,
+            invocation: { modelInvocable: true, userInvocable: false },
+            source: 'bundled',
+            provider: 'ai-engineering-os',
+          })),
+        get: async (candidate) => {
+          const skill = (await readSkills()).find((item) => item.name === candidate?.name)
+          if (!skill) return undefined
+          return {
+            name: skill.name,
+            description: skill.description,
+            invocation: { modelInvocable: true, userInvocable: false },
+            source: 'bundled',
+            provider: 'ai-engineering-os',
+            content: skill.body,
+          }
+        },
+      })),
+    )
+  } catch (error) {
+    failures.push(`skills: ${error?.message ?? String(error)}`)
   }
+}
 
-  if (ctx.systemPrompt?.section) {
+function registerPromptSection(ctx, contextText, failures) {
+  if (!ctx.systemPrompt?.section) return
+  try {
     ctx.effect(() =>
       ctx.systemPrompt.section({
         name: 'ai-engineering-os',
-        text: contextText,
+        order: SECTION_ORDER,
+        text: String(contextText),
       }),
     )
+  } catch (error) {
+    failures.push(`system prompt section: ${error?.message ?? String(error)}`)
   }
+}
+
+export function registerSurfaces(ctx, settings, contextText) {
+  const failures = []
+  registerTools(ctx, settings, failures)
+  registerCommands(ctx, settings, failures)
+  registerSkills(ctx, failures)
+  registerPromptSection(ctx, contextText, failures)
+  if (failures.length > 0) {
+    // Loud on purpose: a rejected surface shape must be visible in the host log
+    // even though enforcement itself is unaffected.
+    console.error('[ai-engineering-os] surface registration failed: ' + failures.join('; '))
+  }
+  return failures
 }

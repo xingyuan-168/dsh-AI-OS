@@ -1,0 +1,17 @@
+# Bundle layer for AI Engineering OS, applied when a profile lists this bundle
+# in dsh.profile.bundles. Rows are inserted (not overridden) because this
+# package introduces its own plugin row rather than reconfiguring an existing
+# one; an override entry would match no id and silently do nothing.
+#
+# The row's `config` is the default global policy. A user can restate this row
+# in their profile's own cordis.patch.yml to override it — later layers win, and
+# a patch replaces a row's whole config rather than deep-merging keys, so an
+# override must repeat every key it wants to keep.
+- insert:
+    - id: ai-engineering-os
+      name: ai-engineering-os
+      config:
+        strict: true
+        kernelCommand: aios
+        timeoutMs: 10000
+        failMode: closed
