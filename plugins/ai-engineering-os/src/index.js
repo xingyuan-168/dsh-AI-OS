@@ -32,7 +32,7 @@
 
 import { adjudicate } from './kernel.js'
 import { extractName, resolveCwd, sessionPayload, toolPayload } from './payload.js'
-import { registerSurfaces } from './surfaces.js'
+import { optionalService, registerSurfaces } from './surfaces.js'
 
 export const name = 'ai-engineering-os'
 // Cordis' context throws when a plugin reads a service it did not declare, so
@@ -55,6 +55,10 @@ export const DEFAULTS = {
   // model unusable. The tool surface is therefore opt-in, and enforcement
   // (`tools/pre-execute`) plus the session context never depend on it.
   exposeTools: false,
+  // Debug-only: append each adjudication to the project's gitignored runtime
+  // state so enforcement can be observed from outside the host. Never affects a
+  // verdict; see ./kernel.js.
+  diagnostics: false,
 }
 
 const FALLBACK_CONTEXT =
@@ -82,6 +86,10 @@ async function sessionContext(settings) {
 
 export async function apply(ctx, config = {}) {
   const settings = { ...DEFAULTS, ...config }
+  // The session's workspace root, when the host exposes it. Tool executions may
+  // not carry a cwd, and a relative target resolved against the wrong base would
+  // decide against the wrong project — or against nothing at all.
+  const workspaceRoot = optionalService(ctx, 'sandboxPolicy')?.workspaceRoot
 
   ctx.on('tools/pre-execute', async (exec, next) => {
     const decision = await adjudicate(
@@ -89,7 +97,13 @@ export async function apply(ctx, config = {}) {
         ...toolPayload({
           tool: extractName(exec) ?? exec?.name,
           args: exec?.arguments ?? exec?.args ?? exec?.input ?? exec?.tool_input,
-          cwd: resolveCwd(exec?.cwd, exec?.workdir),
+          cwd: resolveCwd(
+            exec?.cwd,
+            exec?.workdir,
+            exec?.agent?.cwd,
+            exec?.session?.cwd,
+            workspaceRoot,
+          ),
         }),
         // Tier 2: strict mode makes an uninitialized project follow the same
         // gates. The kernel materializes the default policy in memory only.

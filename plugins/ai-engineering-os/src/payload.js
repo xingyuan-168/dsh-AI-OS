@@ -19,7 +19,7 @@
 
 const PATH_KEYS = ['path', 'filePath', 'file_path', 'target', 'processPath', 'hostPath']
 const COMMAND_KEYS = ['command', 'cmd', 'script', 'input']
-const NAME_KEYS = ['name', 'tool', 'toolName', 'tool_name']
+const NAME_KEYS = ['name', 'toolName', 'tool_name', 'tool']
 
 const firstString = (value, keys) => {
   if (!value || typeof value !== 'object') return undefined
@@ -36,7 +36,19 @@ export function extractPath(value) {
 }
 
 export function extractName(value) {
-  return firstString(value, NAME_KEYS)
+  if (typeof value === 'string' && value.length > 0) return value
+  if (!value || typeof value !== 'object') return undefined
+  for (const key of NAME_KEYS) {
+    const candidate = value[key]
+    if (typeof candidate === 'string' && candidate.length > 0) return candidate
+    // The execution may nest the tool descriptor rather than name it directly;
+    // an unresolved name would silently downgrade the call to "no AIOS check".
+    if (candidate && typeof candidate === 'object') {
+      const nested = candidate.name
+      if (typeof nested === 'string' && nested.length > 0) return nested
+    }
+  }
+  return undefined
 }
 
 export function extractCommand(value) {

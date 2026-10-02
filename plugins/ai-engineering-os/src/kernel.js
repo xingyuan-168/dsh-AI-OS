@@ -13,6 +13,11 @@
  */
 
 import { spawn } from 'node:child_process'
+import { appendFile, mkdir, stat } from 'node:fs/promises'
+import { join } from 'node:path'
+
+const DIAGNOSTIC_FILE = 'plugin-diagnostics.jsonl'
+const DIAGNOSTIC_LIMIT_BYTES = 512 * 1024
 
 const DENY = (ruleId, reason, targets = []) => ({
   decision: 'deny',
@@ -120,11 +125,48 @@ export async function adjudicate(payload, settings) {
     payload,
     Number(settings.timeoutMs ?? 10000),
   )
-  if (result.ok) return result.decision
-  if (settings.failMode === 'observe' || !isMutating(payload)) {
-    return ALLOW(result.ruleId, result.reason)
-  }
-  return DENY(result.ruleId, result.reason)
+  const decision = result.ok
+    ? result.decision
+    : settings.failMode === 'observe' || !isMutating(payload)
+      ? ALLOW(result.ruleId, result.reason)
+      : DENY(result.ruleId, result.reason)
+  await recordDiagnostic(payload, decision, settings)
+  return decision
 }
 
 export const decisions = { ALLOW, DENY }
+
+/**
+ * Debug-only observability (`diagnostics: true`).
+ *
+ * The host exposes no readable plugin log, so without this an enforcement
+ * listener that never fires is indistinguishable from one that fires and
+ * allows — exactly the ambiguity that made a missed `write` call unprovable.
+ * Records what the plugin actually extracted plus the verdict, appends to the
+ * project's gitignored runtime state, and refuses to influence any decision.
+ */
+async function recordDiagnostic(payload, decision, settings) {
+  if (settings.diagnostics !== true) return
+  try {
+    // The disposable runtime area, not `.aios/state/`: diagnostics are trash by
+    // definition, and this is the one governed location whose leaves are
+    // cleanable without special authority.
+    const directory = join(String(payload?.cwd || process.cwd()), '.aios', 'tmp')
+    const target = join(directory, DIAGNOSTIC_FILE)
+    const existing = await stat(target).catch(() => undefined)
+    if (existing && existing.size > DIAGNOSTIC_LIMIT_BYTES) return
+    await mkdir(directory, { recursive: true })
+    const line = JSON.stringify({
+      at: new Date().toISOString(),
+      event: payload?.event,
+      tool: payload?.tool,
+      cwd: payload?.cwd,
+      input: payload?.input,
+      decision: decision?.decision,
+      rule_id: decision?.rule_id,
+    })
+    await appendFile(target, line + '\n', 'utf8')
+  } catch {
+    // Diagnostics must never change a verdict.
+  }
+}

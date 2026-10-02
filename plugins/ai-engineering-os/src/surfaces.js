@@ -321,7 +321,7 @@ async function readSkills() {
  * property read remains a fallback for a context that answers only that way.
  * Returns undefined when the service is genuinely absent.
  */
-function optionalService(ctx, key) {
+export function optionalService(ctx, key) {
   try {
     const service = ctx.get?.(key)
     if (service) return service

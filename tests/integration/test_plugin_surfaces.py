@@ -60,6 +60,7 @@ const services = {
   commands: { register: (definition) => { calls.commands.push(definition); return disposer() } },
   skills: { registerProvider: (create) => { calls.skills.push(create); return disposer() } },
   systemPrompt: { section: (section) => { calls.sections.push(section); return disposer() } },
+  sandboxPolicy: { workspaceRoot: request.workspaceRoot ?? '/tmp/workspace-root' },
 }
 const base = {
   on: (name) => { calls.events.push(name); return disposer() },
@@ -81,7 +82,35 @@ const ctx = new Proxy(base, {
 let threw = null
 let failures = null
 
-if (request.mode === 'validate') {
+if (request.mode === 'diagnostics') {
+  // Prove the debug channel records a real adjudication, since the host exposes
+  // no readable plugin log.
+  const { adjudicate } = await import('./src/kernel.js')
+  const { toolPayload } = await import('./src/payload.js')
+  const { readFile } = await import('node:fs/promises')
+  const cwd = request.diagnosticDir
+  try {
+    await adjudicate(
+      toolPayload({ tool: 'write', args: { file_path: 'input/probe.txt' }, cwd }),
+      {
+        kernelCommand: 'aios',
+        timeoutMs: 120000,
+        failMode: 'closed',
+        diagnostics: true,
+        strict: false,
+      },
+    )
+  } catch (error) {
+    threw = error?.stack ?? String(error)
+  }
+  let body = null
+  try {
+    body = await readFile(cwd + '/.aios/tmp/plugin-diagnostics.jsonl', 'utf8')
+  } catch {
+    body = null
+  }
+  process.stdout.write(JSON.stringify({ threw, diagnostics: body }))
+} else if (request.mode === 'validate') {
   // Direct contract checks on the pre-flight validator itself.
   const good = {
     name: 'probe',
@@ -178,7 +207,12 @@ if (request.mode === 'validate') {
 }
 """
 
-FULL_PROFILE = ["tools", "commands", "skills", "systemPrompt"]
+# Services the plugin declares in `inject`; everything else must be read
+# defensively because Cordis throws on an undeclared property read.
+INJECTED = ["tools", "commands", "skills", "systemPrompt"]
+# What a base-backed profile actually exposes, including the optional
+# workspace-root source the plugin consults for a session working directory.
+FULL_PROFILE = [*INJECTED, "sandboxPolicy"]
 
 
 def _probe(project_root: Path, **request: object) -> dict:
@@ -305,5 +339,21 @@ def test_inject_declares_every_service_the_plugin_reads() -> None:
 
     entry = (PLUGIN_ROOT / "src" / "index.js").read_text(encoding="utf-8")
     declared = entry.split("export const inject =", 1)[1].split("\n", 1)[0]
-    for service in FULL_PROFILE:
+    for service in INJECTED:
         assert f"'{service}'" in declared, service
+
+
+def test_diagnostics_channel_records_an_adjudication(governed_repo: Path) -> None:
+    """The channel verification depends on must actually work."""
+
+    report = _probe(governed_repo, mode="diagnostics", diagnosticDir=str(governed_repo))
+    assert report["threw"] is None, report["threw"]
+    body = report["diagnostics"]
+    assert body, "diagnostics file was not written"
+    line = json.loads(body.strip().splitlines()[-1])
+    # The record captures what the plugin extracted plus the verdict, which is
+    # what makes a missed denial provable instead of guessable.
+    assert line["tool"] == "write"
+    assert line["input"]["file_path"] == "input/probe.txt"
+    assert line["decision"] in {"allow", "deny"}
+    assert line["rule_id"]
