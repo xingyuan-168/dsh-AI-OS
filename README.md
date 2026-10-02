@@ -35,7 +35,8 @@ AI Engineering OS 是 DeepSeek Harness 的**工程治理层**：无状态三 Gat
 | --- | --- | --- |
 | `aios` 命令行 | **已可用** | 全局安装完成，`aios --help` 直接可用 |
 | CLI 的 Gate 判定 | **已可用** | `check` / `finish` / `authorize-dsh` 均已实测 |
-| DSH 插件强制 | **已装好，待重启加载** | bundle 已注册进 profile（`dsh.profile.bundles` 含 `ai-engineering-os`，`node_modules` 为指向本仓库的符号链接），Loader 树里已有条目；但该条目当前是 `failed` 状态，因为它的上一次加载用的是修复前的代码 |
+| DSH 插件强制 | **已装好，待重启加载** | bundle 已注册进 profile（`dsh.profile.bundles` 含 `ai-engineering-os`，`node_modules` 是指向本仓库的符号链接）。插件**已经成功加载过一次**并注册了 8 个工具——正因如此才暴露出工具的 `parameters` 必须是 JSON Schema（已修复并加了断言）。当前该行因被关闭而不在 Loader 树里；重启后会带修复后的代码重新组合 |
+| 与 `dsh-experimental-auto-review` 的关系 | 互补，无冲突 | 宿主侧那个是"按工具做 LLM 授权复核"的运行时安全能力；AIOS 是确定性工程治理（Gate/审批/worktree/记忆）。两者互不冒充，AIOS 不把判定交给模型 |
 
 在插件真正加载之前，**没有任何自动拦截**：不会阻止你写 `input/`，也不会阻止 force push。只有你自己或 Agent 主动调用 `aios` 时才受治理。
 
