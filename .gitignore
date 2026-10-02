@@ -14,14 +14,15 @@ dist/
 *.egg-info/
 node_modules/
 
-# AI Engineering OS runtime state
-.aios/state/
-.aios/logs/
-.aios/cache/
-.aios/context/
-.aios/tmp/
-.aios/artifacts/
-.aios/pytest/
+# AI Engineering OS runtime state (any depth: nested checkouts and worktrees,
+# e.g. plugins/<name>/.aios/tmp/, must be ignored too)
+**/.aios/state/
+**/.aios/logs/
+**/.aios/cache/
+**/.aios/context/
+**/.aios/tmp/
+**/.aios/artifacts/
+**/.aios/pytest/
 .worktrees/
 
 # Local secrets and editor state
