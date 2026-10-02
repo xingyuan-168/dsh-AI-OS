@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from typer.testing import CliRunner
 
 from aios.adapters.git import GitRunner
-from aios.application import cleanup_policy
+from aios.application import cleanup_policy, hook_gateway
 from aios.application.hook_gateway import authorize_hook_payload, explain_hook_payload
 from aios.cli.app import app
 from aios.core.gates import evaluate_finish, evaluate_frontend, write_frontend_approval
@@ -81,6 +82,57 @@ def test_cleanup_rejects_tracked_files_and_protected_descendants(governed_repo: 
 )
 def test_cleanup_does_not_guess_unresolved_targets(governed_repo: Path, command: str) -> None:
     assert explain_hook_payload(payload(governed_repo, command))["decision"] == "deny"
+
+
+def test_cleanup_roots_follow_the_target_checkout(
+    governed_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Disposable areas belong to the checkout that holds the target.
+
+    A host session may run with an unrelated process cwd; the cleanup decision
+    must not depend on it for an absolute target under a governed repo.
+    """
+    monkeypatch.chdir(tmp_path)
+    leaf = governed_repo / ".aios/tmp/scratch.txt"
+    leaf.parent.mkdir(parents=True, exist_ok=True)
+    leaf.write_text("scratch\n", encoding="utf-8")
+    result = explain_hook_payload(
+        payload(tmp_path, f'Remove-Item -LiteralPath "{leaf}" -Force')
+    )
+    assert result["decision"] == "allow", result
+    assert result["rule_id"] == "CLEANUP_TARGET_CHECKED"
+
+
+def test_relative_targets_require_an_anchored_base(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unanchored base would match protected patterns against the wrong root."""
+    monkeypatch.setattr(cleanup_policy.tempfile, "gettempdir", lambda: str(tmp_path / "temp"))
+    # The pytest temp lives inside this repo, so the real locator would always
+    # find an anchor here; simulate a base outside any checkout instead.
+    monkeypatch.setattr(cleanup_policy, "locate_checkout", lambda path: tmp_path)
+    (tmp_path / "scratch.txt").write_text("x\n", encoding="utf-8")
+    cleanup = explain_hook_payload(payload(tmp_path, 'Remove-Item -LiteralPath "scratch.txt"'))
+    assert cleanup["decision"] == "deny", cleanup
+    assert "no verifiable project base" in cleanup["reason"], cleanup
+    monkeypatch.setattr(
+        hook_gateway,
+        "resolve_runtime_root",
+        lambda cwd: SimpleNamespace(project_root=tmp_path, checkout_root=tmp_path, worktree=None),
+    )
+    write = explain_hook_payload(
+        payload(tmp_path, "", "Write") | {"tool_input": {"file_path": "docs/x.md"}}
+    )
+    assert write["decision"] == "deny", write
+    assert write["rule_id"] == "RELATIVE_TARGET_UNRESOLVED"
+
+
+def test_relative_targets_stay_judged_inside_a_real_checkout(governed_repo: Path) -> None:
+    """A governed base keeps relative targets decidable; the gate may still deny."""
+    result = explain_hook_payload(
+        payload(governed_repo, "", "Write") | {"tool_input": {"file_path": "docs/notes.md"}}
+    )
+    assert result["rule_id"] != "RELATIVE_TARGET_UNRESOLVED", result
 
 
 def test_cleanup_and_write_reparse_boundaries(

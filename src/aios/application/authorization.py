@@ -201,9 +201,7 @@ class GovernanceAuthorizationKernel:
     ) -> AuthorizationOutcome:
         command = request.command or ""
         if DELETE_COMMAND.search(command) and request.cwd is not None:
-            rule, reason, targets = check_cleanup(
-                command, request.cwd, request.checkout or request.cwd
-            )
+            rule, reason, targets = check_cleanup(command, request.cwd)
             return AuthorizationOutcome(
                 AuthorizationDecision.ALLOW
                 if rule == "CLEANUP_TARGET_CHECKED"

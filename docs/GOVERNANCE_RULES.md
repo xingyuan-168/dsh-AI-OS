@@ -103,8 +103,9 @@ plugins/ai-engineering-os/
 | `fiberPhase: failed`（其它报错） | 插件 `apply` 抛错（宿主会隔离）：读 `~/.dsh/profiles/<profile>/.plugin-manager/logs/` 最近一次 operation 的报错堆栈；对照官方 `docs/reference/subsystems/{tools,commands,skills,system-prompt}.md` 的注册契约修正 `src/surfaces.js` |
 | 改了源码但报错没变 | 模块缓存：重启 DSH；用 `link:` 安装可省掉重新复制 |
 | 拦截不生效但插件 active | 宿主进程 PATH 里可能没有 `aios`：把该行的 `kernelCommand` 改为绝对路径（如 `C:/Users/<user>/.local/bin/aios.exe`） |
-| 判定套用了错误项目（相对路径写入漏过、清理目标被判"不在允许根下"） | 载荷 `cwd` 不是工作区。相对目标必须以会话工作区为基准：cwd 候选顺序为 `sandboxPolicy.workspaceRoot`（全局服务，暴露 `readonly workspaceRoot: string`）→ `exec.agent.session.header.cwd` → `exec.*`；目标是**绝对路径**时则直接以该路径所在目录为 cwd，不依赖会话 cwd |
-| 打开 `diagnostics: true` 后找不到诊断文件 | 载荷 cwd 不可写或不存在。写入按多候选进行：先 `<cwd>/.aios/tmp/plugin-diagnostics.jsonl`，再系统临时目录 `<tmp>/aios-plugin-diagnostics/`；两处都没有说明 `apply` 未拿到该配置（检查 profile 补丁层的 `config` 是否被整行替换掉） |
+| 判定套用了错误项目（相对路径写入漏过、清理目标被判"不在允许根下"） | 载荷 `cwd` 不是工作区。相对目标必须以会话工作区为基准：cwd 候选顺序为执行 agent 上下文的 `sandboxPolicy.workspaceRoot`（会话级服务）→ 全局 `sandboxPolicy` → `exec.*`；目标是**绝对路径**时则直接以该路径所在目录为 cwd，不依赖会话 cwd。内核侧兜底：相对目标若无法锚定到任何 checkout（无 `.git` 且无 `.aios/project.yaml`），一律 `RELATIVE_TARGET_UNRESOLVED` 拒绝，改用绝对路径重试 |
+| 打开 `diagnostics: true` 后找不到诊断文件 | 载荷 cwd 不可写或不存在。写入按多候选进行：先 `<cwd>/.aios/tmp/plugin-diagnostics.jsonl`，再系统临时目录 `<tmp>/aios-plugin-diagnostics/`；两处都没有说明 `apply` 未拿到该配置（插件未声明 Config schema 时，profile 补丁层的 `config` 覆盖不会到达 `apply`——已知宿主限制） |
+| 删除 `.aios/tmp` 下的文件仍被拒 | 清理允许根由**目标自己的 checkout** 决定（`locate_checkout(target)`），与进程 cwd 无关；文件目标只查受保护名，不做目录遍历。若仍被拒：目标是 tracked 文件、含受保护子项、或不在任何 checkout 的 build/dist/.aios/tmp 下 |
 | 无关项目写不了 `src/` | 在 profile 补丁层覆盖该行，把 `strict` 设为 `false`（记得重述全部 key），未初始化项目即退回只受 Tier 0 约束 |
 | 需要完全回滚 | `plugin_manager remove_bundle ai-engineering-os`（必要时再删 profile manifest 里的 `dependencies`/`bundles` 项与 `node_modules/ai-engineering-os`）；CLI 与仓库事实不受影响 |
 

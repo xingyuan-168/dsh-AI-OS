@@ -112,6 +112,18 @@ def _evaluate(payload: dict[str, Any]) -> dict[str, Any]:
         )
     for raw in paths:
         path = Path(raw)
+        if not path.is_absolute() and not (
+            initialized or (resolved.checkout_root / ".git").exists()
+        ):
+            # A relative target is only meaningful against a real project base.
+            # Without one, protected-path patterns would be matched against an
+            # unrelated root, so fail closed and ask for an absolute path.
+            return _result(
+                "deny",
+                "RELATIVE_TARGET_UNRESOLVED",
+                "relative write target has no verifiable project base; use an absolute path",
+                (raw,),
+            )
         lexical = path if path.is_absolute() else cwd / path
         if any(is_reparse(parent) for parent in (lexical, *lexical.parents)):
             return _result(
