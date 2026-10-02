@@ -14,6 +14,7 @@
 
 import { spawn } from 'node:child_process'
 import { appendFile, mkdir, stat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const DIAGNOSTIC_FILE = 'plugin-diagnostics.jsonl'
@@ -147,26 +148,33 @@ export const decisions = { ALLOW, DENY }
  */
 async function recordDiagnostic(payload, decision, settings) {
   if (settings.diagnostics !== true) return
-  try {
-    // The disposable runtime area, not `.aios/state/`: diagnostics are trash by
-    // definition, and this is the one governed location whose leaves are
-    // cleanable without special authority.
-    const directory = join(String(payload?.cwd || process.cwd()), '.aios', 'tmp')
-    const target = join(directory, DIAGNOSTIC_FILE)
-    const existing = await stat(target).catch(() => undefined)
-    if (existing && existing.size > DIAGNOSTIC_LIMIT_BYTES) return
-    await mkdir(directory, { recursive: true })
-    const line = JSON.stringify({
-      at: new Date().toISOString(),
-      event: payload?.event,
-      tool: payload?.tool,
-      cwd: payload?.cwd,
-      input: payload?.input,
-      decision: decision?.decision,
-      rule_id: decision?.rule_id,
-    })
-    await appendFile(target, line + '\n', 'utf8')
-  } catch {
-    // Diagnostics must never change a verdict.
+  const line = JSON.stringify({
+    at: new Date().toISOString(),
+    event: payload?.event,
+    tool: payload?.tool,
+    cwd: payload?.cwd,
+    input: payload?.input,
+    decision: decision?.decision,
+    rule_id: decision?.rule_id,
+  })
+  // Try the project's disposable runtime area first (the one governed location
+  // whose leaves are cleanable without extra authority), then the OS temp dir.
+  // A wrong or unwritable payload cwd must not be able to hide the record —
+  // silently writing nowhere was itself the reason this probe failed once.
+  const candidates = [
+    join(String(payload?.cwd || process.cwd()), '.aios', 'tmp'),
+    join(tmpdir(), 'aios-plugin-diagnostics'),
+  ]
+  for (const directory of candidates) {
+    try {
+      const target = join(directory, DIAGNOSTIC_FILE)
+      const existing = await stat(target).catch(() => undefined)
+      if (existing && existing.size > DIAGNOSTIC_LIMIT_BYTES) return
+      await mkdir(directory, { recursive: true })
+      await appendFile(target, line + '\n', 'utf8')
+      return
+    } catch {
+      // Try the next location.
+    }
   }
 }

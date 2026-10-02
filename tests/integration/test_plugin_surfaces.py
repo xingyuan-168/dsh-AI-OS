@@ -141,6 +141,18 @@ if (request.mode === 'diagnostics') {
     }
   }
   results.convertedRootType = toParameterSchema({ a: { type: 'string', required: true } }).type
+  // An absolute target must not depend on the session cwd at all.
+  const { toolPayload } = await import('./src/payload.js')
+  results.absoluteTargetCwd = toolPayload({
+    tool: 'write',
+    args: { file_path: 'D:/proj/input/x.txt' },
+    cwd: 'D:/somewhere/else',
+  }).cwd
+  results.relativeTargetCwd = toolPayload({
+    tool: 'write',
+    args: { file_path: 'input/x.txt' },
+    cwd: 'D:/proj',
+  }).cwd
   process.stdout.write(JSON.stringify({ threw, results }))
 } else {
   if (request.badDefinition === true) {
@@ -277,6 +289,10 @@ def test_validator_rejects_each_malformed_shape() -> None:
     results = _probe(Path.cwd(), mode="validate")["results"]
     assert results["ok"] == "accepted"
     assert results["convertedRootType"] == "object"
+    # A wrong session cwd must not move an absolute protected target out of
+    # scope; a relative target still needs the session base.
+    assert results["absoluteTargetCwd"].replace("\\", "/") == "D:/proj/input"
+    assert results["relativeTargetCwd"] == "D:/proj"
     malformed = (
         "nullType",
         "noProperties",

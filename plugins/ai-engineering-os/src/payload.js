@@ -17,6 +17,8 @@
  * not this file, decides what a missing target means.
  */
 
+import { dirname, isAbsolute } from 'node:path'
+
 const PATH_KEYS = ['path', 'filePath', 'file_path', 'target', 'processPath', 'hostPath']
 const COMMAND_KEYS = ['command', 'cmd', 'script', 'input']
 const NAME_KEYS = ['name', 'toolName', 'tool_name', 'tool']
@@ -64,11 +66,18 @@ export function resolveCwd(...candidates) {
 }
 
 export function toolPayload({ tool, args, cwd }) {
+  const data = args && typeof args === 'object' ? args : {}
+  const target = extractPath(data)
+  // An absolute target makes the session cwd irrelevant: the kernel resolves a
+  // governing project from the target itself. Preferring that base means a
+  // missing or wrong session cwd can never move a protected path out of scope,
+  // which is exactly how a write to `.aios/state/` slipped through once.
+  const base = target && isAbsolute(target) ? dirname(target) : resolveCwd(cwd)
   return {
     event: 'tools/pre-execute',
-    cwd: resolveCwd(cwd),
-    tool: String(tool ?? extractName(args) ?? '').toLowerCase(),
-    input: args && typeof args === 'object' ? args : {},
+    cwd: base,
+    tool: String(tool ?? extractName(data) ?? '').toLowerCase(),
+    input: data,
   }
 }
 

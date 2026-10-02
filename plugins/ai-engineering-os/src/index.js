@@ -79,8 +79,11 @@ function preToolVerdict(decision) {
   }
 }
 
-async function sessionContext(settings) {
-  const decision = await adjudicate(sessionPayload({ cwd: process.cwd() }), settings)
+async function sessionContext(settings, workspaceRoot) {
+  const decision = await adjudicate(
+    sessionPayload({ cwd: resolveCwd(workspaceRoot, process.cwd()) }),
+    settings,
+  )
   return typeof decision.reason === 'string' && decision.reason ? decision.reason : FALLBACK_CONTEXT
 }
 
@@ -98,11 +101,15 @@ export async function apply(ctx, config = {}) {
           tool: extractName(exec) ?? exec?.name,
           args: exec?.arguments ?? exec?.args ?? exec?.input ?? exec?.tool_input,
           cwd: resolveCwd(
+            // The session workspace is authoritative for resolving a relative
+            // target; a tool-local or process cwd is only a fallback, because a
+            // wrong base decides against the wrong project.
+            workspaceRoot,
+            exec?.agent?.session?.cwd,
+            exec?.session?.cwd,
+            exec?.agent?.cwd,
             exec?.cwd,
             exec?.workdir,
-            exec?.agent?.cwd,
-            exec?.session?.cwd,
-            workspaceRoot,
           ),
         }),
         // Tier 2: strict mode makes an uninitialized project follow the same
@@ -118,8 +125,8 @@ export async function apply(ctx, config = {}) {
   ctx.on('agent/created', async () => {
     // Announcement only: the kernel's session facts are surfaced through the
     // prompt section below. This never blocks a session from starting.
-    await sessionContext(settings)
+    await sessionContext(settings, workspaceRoot)
   })
 
-  registerSurfaces(ctx, settings, await sessionContext(settings))
+  registerSurfaces(ctx, settings, await sessionContext(settings, workspaceRoot))
 }
