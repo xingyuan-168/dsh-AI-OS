@@ -98,6 +98,7 @@ plugins/ai-engineering-os/
 | 条目数没变化 | `dsh.bundle` 或包内 `cordis.patch.yml` 没被识别：核对键名与 `files` 是否包含该文件 |
 | `install_bundle` 返回 `not-bundle` | 同上；另外 profile 里可能残留上一轮的**旧副本**，删掉 `node_modules/ai-engineering-os` 再装 |
 | `set_plugin` 用包名报 `unknown-plugin` | 改用 `include:<rowId>` 形式寻址 |
+| 插件 active，但整轮请求失败：`Invalid schema for function ...: schema must be a JSON Schema of 'type: "object"', got 'type: null'` | 工具的 `parameters` 被原样发给模型，必须是 JSON Schema（根为 `type: "object"`）；传 reference 的"按键 DSL"会得到 `type: null`。用 `toParameterSchema()` 转换：定义按键书写，注册前生成 `{ type: 'object', properties, required[] }` |
 | `fiberPhase: failed`，报错含 `cannot get property "X" without inject` | 插件读了没在 `inject` 里声明的服务：Cordis 上下文是**抛错代理**，"先探测再使用"的写法本身就失败。把该服务加进 `inject`（基础 profile 由 `@deepseek-ai/dsh-base` 提供 `tools`/`commands`/`skills`/`systemPrompt`），或用 `ctx.get(name)` 防御式读取 |
 | `fiberPhase: failed`（其它报错） | 插件 `apply` 抛错（宿主会隔离）：读 `~/.dsh/profiles/<profile>/.plugin-manager/logs/` 最近一次 operation 的报错堆栈；对照官方 `docs/reference/subsystems/{tools,commands,skills,system-prompt}.md` 的注册契约修正 `src/surfaces.js` |
 | 改了源码但报错没变 | 模块缓存：重启 DSH；用 `link:` 安装可省掉重新复制 |

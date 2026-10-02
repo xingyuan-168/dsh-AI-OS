@@ -11,6 +11,8 @@
  * Shapes follow the published host contracts
  * (docs/reference/subsystems/{tools,commands,skills,system-prompt}.md):
  *   - tool: { name, description, parameters, output: { schema, render }, execute }
+ *     where `parameters` must already be a JSON Schema of `type: "object"`,
+ *     because it is forwarded to the model unchanged
  *   - command: { name, description, handler(invocation) -> { kind, text } }
  *   - prompt section: { name, order, text }
  *   - skill provider: { name, list(options), get(candidate, options) }
@@ -331,6 +333,30 @@ function optionalService(ctx, key) {
   }
 }
 
+/**
+ * Build the model-facing JSON Schema for one tool's arguments.
+ *
+ * `parameters` is forwarded to the model verbatim, so it must be a JSON Schema
+ * whose root declares `type: "object"`. Passing the author-facing per-key map
+ * straight through produced `type: null`, and the provider rejected the whole
+ * request ("Invalid schema for function ... got 'type: null'"). The per-key maps
+ * below stay readable; this converts them.
+ */
+export function toParameterSchema(parameters = {}) {
+  const properties = {}
+  const required = []
+  for (const [name, spec] of Object.entries(parameters)) {
+    const { required: isRequired, ...rest } = spec
+    properties[name] = rest
+    if (isRequired === true) required.push(name)
+  }
+  return {
+    type: 'object',
+    properties,
+    ...(required.length > 0 ? { required } : {}),
+  }
+}
+
 function registerTools(ctx, settings, failures) {
   const tools = optionalService(ctx, 'tools')
   if (!tools?.register) {
@@ -342,7 +368,7 @@ function registerTools(ctx, settings, failures) {
       tools.register({
         name: definition.name,
         description: definition.description,
-        parameters: definition.parameters,
+        parameters: toParameterSchema(definition.parameters),
         output: {
           // The kernel's envelope is arbitrary JSON, so the canonical output is
           // declared unconstrained and rendered as text.

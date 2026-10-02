@@ -101,7 +101,18 @@ process.stdout.write(JSON.stringify({
   tools: calls.tools.map((tool) => ({
     name: tool.name,
     hasExecute: typeof tool.execute === 'function',
-    hasParameters: typeof tool.parameters === 'object' && tool.parameters !== null,
+    parametersIsObject: typeof tool.parameters === 'object' && tool.parameters !== null,
+    // The model receives `parameters` verbatim, so the root must declare
+    // type: "object"; a per-key map yields type: null and the provider rejects
+    // the whole request.
+    parametersType: tool.parameters?.type ?? null,
+    propertiesIsObject:
+      typeof tool.parameters?.properties === 'object' && tool.parameters.properties !== null,
+    requiredIsArrayOrAbsent:
+      tool.parameters?.required === undefined || Array.isArray(tool.parameters.required),
+    requiredDeclaredInProperties: (tool.parameters?.required ?? []).every(
+      (key) => key in (tool.parameters?.properties ?? {}),
+    ),
     outputIsObject: typeof tool.output === 'object' && tool.output !== null,
     schemaIsObject: typeof tool.output?.schema === 'object' && tool.output.schema !== null,
     renderIsFunction: typeof tool.output?.render === 'function',
@@ -154,11 +165,26 @@ def test_every_tool_declares_the_required_output_contract(governed_repo: Path) -
     assert len(report["tools"]) == 8
     for tool in report["tools"]:
         assert tool["hasExecute"], tool["name"]
-        assert tool["hasParameters"], tool["name"]
+        assert tool["parametersIsObject"], tool["name"]
         # output { schema, render } is mandatory; omitting it fails registration.
         assert tool["outputIsObject"], tool["name"]
         assert tool["schemaIsObject"], tool["name"]
         assert tool["renderIsFunction"], tool["name"]
+
+
+def test_every_tool_parameter_schema_is_a_json_object_schema(governed_repo: Path) -> None:
+    """`parameters` reaches the model unchanged, so its root must be an object.
+
+    A per-key map (the author-facing DSL shape) serialised as `type: null` and
+    made the provider fail the entire turn.
+    """
+
+    report = _probe(governed_repo)
+    for tool in report["tools"]:
+        assert tool["parametersType"] == "object", tool["name"]
+        assert tool["propertiesIsObject"], tool["name"]
+        assert tool["requiredIsArrayOrAbsent"], tool["name"]
+        assert tool["requiredDeclaredInProperties"], tool["name"]
 
 
 def test_a_tool_executes_through_the_kernel_and_renders_text(governed_repo: Path) -> None:
