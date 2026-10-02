@@ -24,7 +24,8 @@ DSH 工具、MCP 与 CLI 共享实现和业务响应封装（`{ok, data} / {ok:f
 - **人工命令**：`/aios-check`、`/aios-status`、`/aios-memory`，经 `ctx.commands.register` 注册；不进模型请求。
 - **Skill Provider**：`ctx.skills.registerProvider` 读取 `plugins/ai-engineering-os/skills/*/SKILL.md`；按需拉取。
 - **提示注入**：`ctx.systemPrompt.section` 输出宪法摘要与当前 Gate 状态。
-- **插件配置**：`strict`（默认 true）、`uninitializedProjects`（默认 `strict`）、`kernelCommand`（默认 `aios`）、`timeoutMs`（默认 10000）、`failMode`（默认 `closed`）、`exposeTools`（默认 **false**，注册 8 个治理工具）。
+- **插件配置**：`strict`（默认 true）、`uninitializedProjects`（默认 `strict`）、`kernelCommand`（默认 `aios`）、`timeoutMs`（默认 10000）、`failMode`（默认 `closed`）、`exposeTools`（默认 **false**，注册 8 个治理工具）、`diagnostics`（默认 **false**，把每次裁决追加到 `<cwd>/.aios/tmp/plugin-diagnostics.jsonl` 或系统临时目录，仅供排查，绝不改变裁决）。
+- **cwd 基准**：判定相对目标时以会话工作区为准——`sandboxPolicy.workspaceRoot`（全局服务）优先，其后是 `exec.*`；目标为绝对路径时以该路径所在目录为 cwd。基准错了会判定到错误的项目。
 - **全局策略**：就是 profile 补丁条目里的 `config`（上列各键）；插件不读第二份策略文件，`strict` 由插件随每次载荷以 `strict` 字段传给内核，内核不落盘。补丁整行替换 `config`，覆盖时须重述所有要保留的键。
 
 ## CLI 命令

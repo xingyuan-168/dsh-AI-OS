@@ -103,6 +103,8 @@ plugins/ai-engineering-os/
 | `fiberPhase: failed`（其它报错） | 插件 `apply` 抛错（宿主会隔离）：读 `~/.dsh/profiles/<profile>/.plugin-manager/logs/` 最近一次 operation 的报错堆栈；对照官方 `docs/reference/subsystems/{tools,commands,skills,system-prompt}.md` 的注册契约修正 `src/surfaces.js` |
 | 改了源码但报错没变 | 模块缓存：重启 DSH；用 `link:` 安装可省掉重新复制 |
 | 拦截不生效但插件 active | 宿主进程 PATH 里可能没有 `aios`：把该行的 `kernelCommand` 改为绝对路径（如 `C:/Users/<user>/.local/bin/aios.exe`） |
+| 判定套用了错误项目（相对路径写入漏过、清理目标被判"不在允许根下"） | 载荷 `cwd` 不是工作区。相对目标必须以会话工作区为基准：cwd 候选顺序为 `sandboxPolicy.workspaceRoot`（全局服务，暴露 `readonly workspaceRoot: string`）→ `exec.agent.session.header.cwd` → `exec.*`；目标是**绝对路径**时则直接以该路径所在目录为 cwd，不依赖会话 cwd |
+| 打开 `diagnostics: true` 后找不到诊断文件 | 载荷 cwd 不可写或不存在。写入按多候选进行：先 `<cwd>/.aios/tmp/plugin-diagnostics.jsonl`，再系统临时目录 `<tmp>/aios-plugin-diagnostics/`；两处都没有说明 `apply` 未拿到该配置（检查 profile 补丁层的 `config` 是否被整行替换掉） |
 | 无关项目写不了 `src/` | 在 profile 补丁层覆盖该行，把 `strict` 设为 `false`（记得重述全部 key），未初始化项目即退回只受 Tier 0 约束 |
 | 需要完全回滚 | `plugin_manager remove_bundle ai-engineering-os`（必要时再删 profile manifest 里的 `dependencies`/`bundles` 项与 `node_modules/ai-engineering-os`）；CLI 与仓库事实不受影响 |
 
