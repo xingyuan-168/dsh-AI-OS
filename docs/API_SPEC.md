@@ -20,11 +20,12 @@ DSH 工具、MCP 与 CLI 共享实现和业务响应封装（`{ok, data} / {ok:f
 ## DSH 宿主契约
 
 - **事件监听**：`tools/pre-execute`（唯一的派发前拒绝点，覆盖全部工具）、`agent/created`（会话建立）。`fs/write-intent` / `fs/edit-intent` 是单槽写意图决策，不能拒绝操作，插件不注册；内核仍接受这两类载荷以便诊断。
-- **人工命令**：`/aios-check`、`/aios-finish`、`/aios-status`、`/aios-memory`，经 `ctx.commands.register` 注册。
-- **Skill Provider**：`ctx.skills.registerProvider` 读取 `plugins/ai-engineering-os/skills/*/SKILL.md`。
+- **工具面**：8 个治理工具，**默认不注册**（`exposeTools: false`）。它们会进入每一次模型请求的工具目录，schema 非法即整轮请求失败，因此默认关闭且注册前逐个自校验（ADR-0019）。开启后契约见上表。
+- **人工命令**：`/aios-check`、`/aios-status`、`/aios-memory`，经 `ctx.commands.register` 注册；不进模型请求。
+- **Skill Provider**：`ctx.skills.registerProvider` 读取 `plugins/ai-engineering-os/skills/*/SKILL.md`；按需拉取。
 - **提示注入**：`ctx.systemPrompt.section` 输出宪法摘要与当前 Gate 状态。
-- **插件配置**：`strict`（默认 true）、`uninitializedProjects`（默认 `strict`）、`kernelCommand`（默认 `aios`）、`timeoutMs`（默认 10000）、`failMode`（默认 `closed`）。
-- **全局策略**：就是 profile 补丁条目里的 `config`（`strict`、`kernelCommand`、`timeoutMs`、`failMode`）；插件不读第二份策略文件，`strict` 由插件随每次载荷以 `strict` 字段传给内核，内核不落盘。
+- **插件配置**：`strict`（默认 true）、`uninitializedProjects`（默认 `strict`）、`kernelCommand`（默认 `aios`）、`timeoutMs`（默认 10000）、`failMode`（默认 `closed`）、`exposeTools`（默认 **false**，注册 8 个治理工具）。
+- **全局策略**：就是 profile 补丁条目里的 `config`（上列各键）；插件不读第二份策略文件，`strict` 由插件随每次载荷以 `strict` 字段传给内核，内核不落盘。补丁整行替换 `config`，覆盖时须重述所有要保留的键。
 
 ## CLI 命令
 

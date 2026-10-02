@@ -7,6 +7,11 @@
 # in their profile's own cordis.patch.yml to override it — later layers win, and
 # a patch replaces a row's whole config rather than deep-merging keys, so an
 # override must repeat every key it wants to keep.
+#
+# `exposeTools` is false by default: registered tools join the tool catalogue of
+# every model request, so a bad schema there fails whole turns. Governance
+# denies operations; it never makes the model unusable. Set it true to also get
+# the 8 agent-callable governance tools (the equivalent `aios` CLI always works).
 - insert:
     - id: ai-engineering-os
       name: ai-engineering-os
@@ -15,3 +20,4 @@
         kernelCommand: aios
         timeoutMs: 10000
         failMode: closed
+        exposeTools: false

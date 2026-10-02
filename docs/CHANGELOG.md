@@ -8,6 +8,16 @@
 
 ## Unreleased
 
+### 治理退出模型请求关键路径（2026-10-02，ADR-0019）
+
+一次真实故障暴露了设计缺陷：工具的 `parameters` schema 非法时，提供方拒绝的是**整轮模型请求**（`Invalid schema for function 'approval_record': … got 'type: null'`），于是治理层的一个笔误让会话完全不可用——而治理只被允许输出"允许"或"拒绝 + 规则编号"。
+
+- **工具面默认关闭**：新增 `exposeTools`（默认 `false`）。默认配置下插件不向模型工具目录贡献任何条目；强制面 `tools/pre-execute` 与会话上下文**永不依赖**该开关。
+- **注册前自校验**：新增 `assertToolSchema()`，校验 `parameters` 根为 `type: "object"`、`properties` 为对象、`required` 键均已声明、`output.schema` 为对象、`output.render` 与 `execute` 为函数；不通过则**跳过该工具并带工具名记录**，绝不交给宿主，其余工具不受影响。
+- **模型可见面清单化**（`docs/GOVERNANCE_RULES.md`「模型可见面」）：工具目录＝每次请求（默认关闭）、技能目录＝按需拉取、会话上下文＝文本；新增模型可见面前必须先说明其类别与失败后果。
+- **测试**：桩测试新增"默认配置下注册数为 0"、"显式打开后 8 个工具全部合法"、"坏定义被跳过且**从未调用宿主的 register**"、"validator 逐种畸形输入均拒绝"四组断言；bundle patch 的 `config` 断言补 `exposeTools: false`。
+- **文档**：新增 ADR-0019；README/API_SPEC/Skills 同步——工具面不可用时改用等价的 `aios … --json` CLI。
+
 ### 插件打包与激活修复（2026-10-01 实测）
 
 根因不是"DSH 需要重启"这么简单，而是两处打包/语法错误加一处模块缓存：

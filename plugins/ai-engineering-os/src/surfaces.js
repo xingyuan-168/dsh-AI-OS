@@ -12,7 +12,9 @@
  * (docs/reference/subsystems/{tools,commands,skills,system-prompt}.md):
  *   - tool: { name, description, parameters, output: { schema, render }, execute }
  *     where `parameters` must already be a JSON Schema of `type: "object"`,
- *     because it is forwarded to the model unchanged
+ *     because it is forwarded to the model unchanged. The whole tool surface is
+ *     opt-in (`exposeTools`), and every definition is validated before
+ *     registration so a bad schema can never reach a request.
  *   - command: { name, description, handler(invocation) -> { kind, text } }
  *   - prompt section: { name, order, text }
  *   - skill provider: { name, list(options), get(candidate, options) }
@@ -357,18 +359,71 @@ export function toParameterSchema(parameters = {}) {
   }
 }
 
+/**
+ * Validate one tool definition before it can reach the host.
+ *
+ * Registration alone is not enough evidence of safety: `parameters` becomes part
+ * of every model request, and an invalid schema makes the provider reject the
+ * whole turn rather than deny one operation. Everything the model or the runtime
+ * depends on is therefore checked here, and a failure drops that tool instead of
+ * poisoning requests.
+ */
+export function assertToolSchema(definition) {
+  const fail = (message) => {
+    throw new Error(`invalid tool definition for "${definition?.name ?? '?'}": ${message}`)
+  }
+
+  if (typeof definition?.name !== 'string' || !definition.name) fail('name must be a non-empty string')
+  if (typeof definition?.description !== 'string' || !definition.description) {
+    fail('description must be a non-empty string')
+  }
+  if (typeof definition?.execute !== 'function') fail('execute must be a function')
+
+  const parameters = definition.parameters
+  if (!parameters || typeof parameters !== 'object' || Array.isArray(parameters)) {
+    fail('parameters must be an object')
+  }
+  if (parameters.type !== 'object') {
+    fail(`parameters.type must be "object", got ${JSON.stringify(parameters.type ?? null)}`)
+  }
+  const properties = parameters.properties
+  if (!properties || typeof properties !== 'object' || Array.isArray(properties)) {
+    fail('parameters.properties must be an object')
+  }
+  if (parameters.required !== undefined) {
+    if (!Array.isArray(parameters.required)) fail('parameters.required must be an array')
+    for (const key of parameters.required) {
+      if (!(key in properties)) fail(`parameters.required lists undeclared key "${key}"`)
+    }
+  }
+
+  const output = definition.output
+  if (!output || typeof output !== 'object') fail('output must be an object')
+  if (!output.schema || typeof output.schema !== 'object') fail('output.schema must be an object')
+  if (typeof output.render !== 'function') fail('output.render must be a function')
+  return definition
+}
+
 function registerTools(ctx, settings, failures) {
+  if (settings.exposeTools !== true) {
+    // Default: contribute nothing to the model-facing tool catalogue.
+    return
+  }
   const tools = optionalService(ctx, 'tools')
   if (!tools?.register) {
     failures.push('tools: service unavailable')
     return
   }
   for (const definition of TOOL_DEFINITIONS) {
+    let validated
     try {
-      tools.register({
+      // Conversion is inside the guard too: a definition whose parameter map
+      // cannot be read must be skipped, not allowed to abort the loop.
+      const parameters = toParameterSchema(definition.parameters)
+      validated = assertToolSchema({
         name: definition.name,
         description: definition.description,
-        parameters: toParameterSchema(definition.parameters),
+        parameters,
         output: {
           // The kernel's envelope is arbitrary JSON, so the canonical output is
           // declared unconstrained and rendered as text.
@@ -385,6 +440,14 @@ function registerTools(ctx, settings, failures) {
           return outcome.result
         },
       })
+    } catch (error) {
+      // Skipped, never registered: an invalid schema would fail every request.
+      // The tool is named so the log identifies which definition to fix.
+      failures.push(`tool ${definition.name}: ${error?.message ?? String(error)}`)
+      continue
+    }
+    try {
+      tools.register(validated)
     } catch (error) {
       failures.push(`tool ${definition.name}: ${error?.message ?? String(error)}`)
     }

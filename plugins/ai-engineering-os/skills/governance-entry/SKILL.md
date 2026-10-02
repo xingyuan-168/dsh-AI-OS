@@ -5,7 +5,15 @@ description: Apply the AI Engineering OS governance gates at task start, before 
 
 # Governance entry
 
-Run the three stateless gates through the `ai-engineering-os` DSH tools (or the equivalent `aios` CLI commands). The gates answer "allowed / not allowed and why"; they never tell you how to do professional work.
+Run the three stateless gates and report "allowed / not allowed and why"; they never tell you how to do professional work.
+
+**How to call them.** The `ai-engineering-os` DSH tools are **off by default** (`exposeTools: false`), because registered tools join every model request and a bad schema there fails whole turns ([ADR-0019](../../../../docs/ADR/ADR-0019-governance-must-not-enter-the-request-path.md)). So:
+
+- If the tools are present in your catalogue, call them directly (examples below).
+- Otherwise use the equivalent CLI through the shell and read the `--json` envelope:
+  `aios check <root> --change-class <class> --json`, `aios finish <root> --base-ref <sha> --json`,
+  `aios approval record ... --json`, `aios worktree ... --json`, `aios memory ... --json`.
+- Enforcement itself does not depend on the tool surface: `tools/pre-execute` denies protected or destructive operations either way.
 
 ## Task start (Code Start Gate)
 
@@ -30,4 +38,5 @@ Run the finish-checklist skill with the captured base ref, a real test command, 
 
 - Same input produces the same decision; if a gate blocks, fix the observable fact it names, then re-run.
 - Never bypass or fake a gate result; report blocks to the user instead.
-- Record user approvals with `approval_record` before treating frontend work as approved.
+- Record user approvals (tool `approval_record`, or `aios approval record ... --json`) before treating frontend work as approved.
+- A blocked gate is a report to the user, never something to route around.

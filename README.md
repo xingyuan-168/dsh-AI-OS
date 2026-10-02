@@ -35,21 +35,43 @@ AI Engineering OS 是 DeepSeek Harness 的**工程治理层**：无状态三 Gat
 | --- | --- | --- |
 | `aios` 命令行 | **已可用** | 全局安装完成，`aios --help` 直接可用 |
 | CLI 的 Gate 判定 | **已可用** | `check` / `finish` / `authorize-dsh` 均已实测 |
-| DSH 插件强制 | **已装好，待重启加载** | bundle 已注册进 profile（`dsh.profile.bundles` 含 `ai-engineering-os`，`node_modules` 是指向本仓库的符号链接）。插件**已经成功加载过一次**并注册了 8 个工具——正因如此才暴露出工具的 `parameters` 必须是 JSON Schema（已修复并加了断言）。当前该行因被关闭而不在 Loader 树里；重启后会带修复后的代码重新组合 |
+| DSH 插件强制 | **已生效** | `include:ai-engineering-os` 的 `fiberPhase: active`；bundle 已注册进 profile，`node_modules` 是指向本仓库的符号链接。强制面 `tools/pre-execute` 与会话上下文在每次会话生效 |
+| 模型可见面 | **默认零工具** | 8 个治理工具默认**不注册**（`exposeTools: false`），因此治理不会扩大任何请求的工具目录，也不可能因 schema 问题让整轮请求失败（ADR-0019） |
 | 与 `dsh-experimental-auto-review` 的关系 | 互补，无冲突 | 宿主侧那个是"按工具做 LLM 授权复核"的运行时安全能力；AIOS 是确定性工程治理（Gate/审批/worktree/记忆）。两者互不冒充，AIOS 不把判定交给模型 |
 
-在插件真正加载之前，**没有任何自动拦截**：不会阻止你写 `input/`，也不会阻止 force push。只有你自己或 Agent 主动调用 `aios` 时才受治理。
+### 激活与验证
 
-### 激活（重启一次即可）
+插件**已加载生效**。若要确认，看两处：
 
-1. 重启 DeepSeek Harness。
-2. 重启后确认条目已激活：`plugin_manager list_plugins` 里 `include:ai-engineering-os` 的 `fiberPhase` 应为 `active`（不再是 `failed`）。
-3. 确认工具面已就绪：`cordis_inspect_query(host, Tool, listTools)` 里应出现 8 个治理工具（`governance_check`、`project_init`、`approval_record`、`context_refresh`、`worktree_manage`、`memory_search`、`memory_record`、`memory_candidate`）。
-4. 确认行为：对 `input/` 的写入被拒并带规则编号，对 `docs/` 的写入放行。
+1. `plugin_manager list_plugins` 里 `include:ai-engineering-os` 的 `fiberPhase` 应为 `active`。
+2. 新会话的系统提示里应出现内核注入的治理段落（"AI Engineering OS governs this project…"）。
 
-**注意**：修改 `plugins/ai-engineering-os/src/*.js` 之后也必须重启——运行中的宿主重载时会复用已缓存的旧模块（这一点已实测）。
+默认**看不到** 8 个治理工具是预期行为，不是故障（见下）。
 
-重启后如果没生效，按 [治理规则·排障](docs/GOVERNANCE_RULES.md) 的表格逐项排查。
+**注意**：修改 `plugins/ai-engineering-os/src/*.js` 之后必须重启——运行中的宿主重载时会复用已缓存的旧模块（这一点已实测）。
+
+重启或校验不通过时，按 [治理规则·排障](docs/GOVERNANCE_RULES.md) 的表格逐项排查。
+
+### 打开治理工具面（可选）
+
+默认不开，因为注册的工具会进入**每一次模型请求**的工具目录，而 schema 一旦非法，代价是整轮请求失败——治理只能拒绝操作，不该让会话不可用（[ADR-0019](docs/ADR/ADR-0019-governance-must-not-enter-the-request-path.md)）。
+
+需要代理直接调用 8 个治理工具时，在 `~/.dsh/profiles/<profile>/cordis.patch.yml` 把那一行改成：
+
+```yaml
+- id: ai-engineering-os
+  disabled: false
+  config:
+    strict: true
+    kernelCommand: aios
+    timeoutMs: 10000
+    failMode: closed
+    exposeTools: true
+```
+
+补丁按行**整行替换** `config`，所以要重述其它键。改完重启，8 个工具才会出现。
+
+不开工具面也能完成同样的治理动作——用等价的 CLI：`aios check .`、`aios finish . --base-ref <sha> …`、`aios approval record …`、`aios worktree …`、`aios memory …`、`aios context refresh .`，全部支持 `--json`。
 
 ### 日常三种用法
 

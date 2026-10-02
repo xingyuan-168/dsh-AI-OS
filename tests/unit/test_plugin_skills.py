@@ -101,9 +101,20 @@ def test_bundle_patch_inserts_the_governance_row() -> None:
         "kernelCommand": "aios",
         "timeoutMs": 10000,
         "failMode": "closed",
+        # The model-facing tool surface stays opt-in: registered tools join every
+        # request, so a bad schema there fails turns instead of denying work.
+        "exposeTools": False,
     }
     # Override entries in this layer would match no existing row.
     assert all("id" not in entry for entry in layer if isinstance(entry, dict))
+
+
+def test_plugin_defaults_keep_the_model_tool_surface_off() -> None:
+    """The shipped default must not enlarge every request's tool catalogue."""
+
+    entry = (PLUGIN_ROOT / PLUGIN_ENTRY).read_text(encoding="utf-8")
+    defaults = entry.split("export const DEFAULTS =", 1)[1].split("}", 1)[0]
+    assert "exposeTools: false" in defaults
 
 
 def test_plugin_entry_declares_the_cordis_contract() -> None:

@@ -16,6 +16,10 @@
  *   - `agent/created` announces a session, so the constitution section can be
  *     assembled from the kernel rather than duplicated here.
  *
+ * The optional 8-tool surface is gated by `exposeTools` (default false): a tool
+ * schema is request payload rather than a governance verdict, so an invalid one
+ * fails the whole turn instead of denying one operation.
+ *
  * Assumed host contract (confirm against the installed host types): a
  * pre-dispatch listener receives the execution and `next`, and returns the
  * host's decision type. `next()` is returned whenever AIOS does not deny, so a
@@ -45,6 +49,12 @@ export const DEFAULTS = {
   kernelCommand: 'aios',
   timeoutMs: 10000,
   failMode: 'closed',
+  // Registered tools join the tool catalogue of EVERY model request, so a
+  // malformed schema there does not deny an operation — it makes the provider
+  // reject the whole turn. Governance may deny work; it must never make the
+  // model unusable. The tool surface is therefore opt-in, and enforcement
+  // (`tools/pre-execute`) plus the session context never depend on it.
+  exposeTools: false,
 }
 
 const FALLBACK_CONTEXT =
