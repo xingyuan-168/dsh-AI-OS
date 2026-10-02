@@ -65,6 +65,35 @@ export function resolveCwd(...candidates) {
   return process.cwd()
 }
 
+/**
+ * Best-effort session workspace for one tool execution.
+ *
+ * The plugin's own context is global, and `sandboxPolicy` may only be provided
+ * on the executing agent's (session) context — reading it there at apply time
+ * yielded nothing, which left relative targets adjudicated against the host
+ * process directory. Consult the executing agent's context first, then the
+ * global fallback captured at apply time. Never throws: an unavailable
+ * workspace degrades to the fallback instead of breaking the verdict.
+ */
+export function executionWorkspace(exec, fallback) {
+  const context = exec?.agent?.ctx
+  if (context) {
+    try {
+      const root = context.get?.('sandboxPolicy')?.workspaceRoot
+      if (typeof root === 'string' && root.length > 0) return root
+    } catch {
+      // Not readable through the store; try the declared-property path.
+    }
+    try {
+      const root = context.sandboxPolicy?.workspaceRoot
+      if (typeof root === 'string' && root.length > 0) return root
+    } catch {
+      // Unavailable on this context.
+    }
+  }
+  return fallback
+}
+
 export function toolPayload({ tool, args, cwd }) {
   const data = args && typeof args === 'object' ? args : {}
   const target = extractPath(data)

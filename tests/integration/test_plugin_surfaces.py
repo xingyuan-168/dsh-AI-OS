@@ -153,6 +153,26 @@ if (request.mode === 'diagnostics') {
     args: { file_path: 'input/x.txt' },
     cwd: 'D:/proj',
   }).cwd
+  // The workspace must come from the executing agent's context, because the
+  // plugin's global context cannot see session-scoped services.
+  const { executionWorkspace } = await import('./src/payload.js')
+  const throwingContext = new Proxy(
+    {
+      get: (key) =>
+        key === 'sandboxPolicy' ? { workspaceRoot: 'D:/agent-workspace' } : undefined,
+    },
+    {
+      get(target, prop) {
+        if (prop in target || typeof prop === 'symbol') return target[prop]
+        throw new Error('cannot get property "' + String(prop) + '" without inject')
+      },
+    },
+  )
+  results.agentContextWorkspace = executionWorkspace(
+    { agent: { ctx: throwingContext } },
+    'D:/global-fallback',
+  )
+  results.fallbackWorkspace = executionWorkspace({}, 'D:/global-fallback')
   process.stdout.write(JSON.stringify({ threw, results }))
 } else {
   if (request.badDefinition === true) {
@@ -293,6 +313,10 @@ def test_validator_rejects_each_malformed_shape() -> None:
     # scope; a relative target still needs the session base.
     assert results["absoluteTargetCwd"].replace("\\", "/") == "D:/proj/input"
     assert results["relativeTargetCwd"] == "D:/proj"
+    # Session-scoped services are read from the executing agent's context, with
+    # the global value as fallback; neither path may throw.
+    assert results["agentContextWorkspace"] == "D:/agent-workspace"
+    assert results["fallbackWorkspace"] == "D:/global-fallback"
     malformed = (
         "nullType",
         "noProperties",

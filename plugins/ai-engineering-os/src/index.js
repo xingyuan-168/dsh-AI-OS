@@ -31,7 +31,13 @@
  */
 
 import { adjudicate } from './kernel.js'
-import { extractName, resolveCwd, sessionPayload, toolPayload } from './payload.js'
+import {
+  executionWorkspace,
+  extractName,
+  resolveCwd,
+  sessionPayload,
+  toolPayload,
+} from './payload.js'
 import { optionalService, registerSurfaces } from './surfaces.js'
 
 export const name = 'ai-engineering-os'
@@ -103,8 +109,10 @@ export async function apply(ctx, config = {}) {
           cwd: resolveCwd(
             // The session workspace is authoritative for resolving a relative
             // target; a tool-local or process cwd is only a fallback, because a
-            // wrong base decides against the wrong project.
-            workspaceRoot,
+            // wrong base decides against the wrong project. The workspace is
+            // resolved per call from the executing agent's context, because the
+            // plugin's global context cannot see session-scoped services.
+            executionWorkspace(exec, workspaceRoot),
             exec?.agent?.session?.cwd,
             exec?.session?.cwd,
             exec?.agent?.cwd,
